@@ -60,7 +60,10 @@ class Voice(private val ctx: Context, private val api: Api) {
                     finish(results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull())
                 }
                 override fun onPartialResults(partial: Bundle?) {
-                    partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let(onPartial)
+                    partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let {
+                        onPartial(it)
+                        if (OVER.containsMatchIn(it) && it.replace(OVER, "").isNotBlank()) finish(it)   // "over": stop the microphone now
+                    }
                 }
                 override fun onError(error: Int) {
                     if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) lastError = "Microphone permission needed"
@@ -78,6 +81,11 @@ class Voice(private val ctx: Context, private val api: Api) {
             cont.invokeOnCancellation { try { r.destroy() } catch (e: Exception) {} }
             r.startListening(intent)
         }
+    }
+
+    companion object {
+        /** Saying "over" (or ओवर) at the end of a command closes the microphone. */
+        val OVER = Regex("(?i)(?:^|\\s)(?:over|ओवर)[\\s.!।]*$")
     }
 
     private val speakerAttrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()

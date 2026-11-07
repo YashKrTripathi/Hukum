@@ -89,14 +89,25 @@ class ConvVM(app: Application) : AndroidViewModel(app) {
         job = viewModelScope.launch {
             try {
                 if (first != null) turn(first, show = showFirst)
-                var silent = 0
+                var silent = 0; var acc = ""
+                val overMode = Prefs.overMode(getApplication())
                 while (active && !(oneShot && first != null)) {
                     status = "listening…"
-                    val heard = voice.listen(lang) { status = "🎙 $it" }
+                    val heard = voice.listen(lang) { status = "🎙 " + (acc + " " + it.replace(Voice.OVER, "")).trim() }
                     if (voice.lastError != null) { messages.add(Msg(false, "⚠️ ${voice.lastError}")); break }
-                    if (heard.isNullOrBlank()) { if (++silent >= (if (oneShot) 2 else 4)) break else continue }
-                    turn(heard, show = true)
-                    if (oneShot) break
+                    if (heard.isNullOrBlank()) {
+                        // silence: a command collected so far is complete
+                        if (acc.isNotBlank()) { val q = acc; acc = ""; turn(q, show = true); if (oneShot) break; continue }
+                        if (++silent >= (if (oneShot) 2 else 4)) break else continue
+                    }
+                    val over = Voice.OVER.containsMatchIn(heard)
+                    acc = (acc + " " + heard.replace(Voice.OVER, "")).trim()
+                    // "over" ends the command at once; without over-mode the first pause ends it as well
+                    if (over || !overMode) {
+                        val q = acc; acc = ""
+                        if (q.isNotBlank()) turn(q, show = true)
+                        if (oneShot || over) { if (oneShot) break }
+                    }
                 }
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) messages.add(Msg(false, "⚠️ ${e.message}"))

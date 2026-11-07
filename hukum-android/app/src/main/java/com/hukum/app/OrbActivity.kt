@@ -17,7 +17,7 @@ class OrbActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         WakeWord.paused = true
         WakeWord.clear(this)
-        val cmd = intent.getStringExtra("cmd")?.takeIf { it.isNotBlank() }
+        val cmd = intent.getStringExtra("cmd")?.replace(Voice.OVER, "")?.trim()?.takeIf { it.isNotBlank() }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = C.accent, background = C.bg, surface = C.panel, onSurface = C.tx, onBackground = C.tx)) {
                 val vm: ConvVM = viewModel()

@@ -47,6 +47,11 @@ fun VoicePage() {
                 })
                 Spacer(Modifier.size(10.dp)); Tx("Always listen for Hukum")
             }
+            var lockedOnly by remember { mutableStateOf(Prefs.wakeLockedOnly(ctx)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(lockedOnly, { lockedOnly = it; Prefs.setWakeLockedOnly(ctx, it) })
+                Spacer(Modifier.size(10.dp)); Mut("Listen only while the phone is locked / screen off")
+            }
             Spacer(Modifier.height(8.dp))
             Row { Chip(if (HukumService.wakeActive) "listening now" else if (on) "armed - open Hukum once to start" else "off", if (HukumService.wakeActive) C.ok else C.mut) }
             if (note.isNotBlank()) Mut(note, Modifier.padding(top = 8.dp))

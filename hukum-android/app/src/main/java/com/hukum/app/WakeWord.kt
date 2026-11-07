@@ -33,6 +33,11 @@ class WakeWord(private val ctx: Context) {
     private fun loop() {
         if (!running) return
         if (paused) { state = "paused (orb open)"; again(1200); return }
+        if (Prefs.wakeLockedOnly(ctx)) {
+            val pm = ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            val km = ctx.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+            if (pm.isInteractive && !km.isKeyguardLocked) { destroy(); state = "mic idle: phone is in use (locked-only mode)"; again(2000); return }
+        }
         if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) { state = "no microphone permission"; again(10_000); return }
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) { state = "this phone has no speech recognition service (install/enable the Google app)"; again(30_000); return }
         destroy()

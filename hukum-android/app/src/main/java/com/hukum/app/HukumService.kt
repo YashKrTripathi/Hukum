@@ -24,17 +24,26 @@ class HukumService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel("hukum_guard", "Hukum is on guard", NotificationManager.IMPORTANCE_MIN))
+    /** The ongoing notification says plainly whether the microphone is on, and has a one-tap "Mic off". */
+    private fun statusNotification(): Notification {
         val open = PendingIntent.getActivity(this, 1, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        val n = Notification.Builder(this, "hukum_guard")
+        val off = PendingIntent.getService(this, 2, Intent(this, HukumService::class.java).setAction("wake_off"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val on = wakeActive && Prefs.wake(this)
+        val b = Notification.Builder(this, "hukum_status")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Hukum is on guard")
-            .setContentText("Waiting for your study calls")
+            .setContentTitle(if (on) "● Mic ON: listening for “Hukum”" else "Mic off: Hukum is not listening")
+            .setContentText(if (on) WakeWord.state else WakeWord.state.ifBlank { "Say nothing: open Hukum to turn it on" })
             .setContentIntent(open)
             .setOngoing(true)
-            .build()
+        if (on) b.addAction(Notification.Action.Builder(null, "Turn mic off", off).build())
+        return b.build()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == "wake_off") { Prefs.setWake(this, false); wake?.stop(); wakeActive = false; WakeWord.state = "switched off" }
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel("hukum_status", "Hukum status", NotificationManager.IMPORTANCE_LOW))
+        val n = statusNotification()
         // The microphone foreground type may only be started while the app is on screen (Android 14), so a restart without the
         // "mic" extra (boot, system restart) keeps the guard but leaves the wake word off until Hukum is opened again.
         val wantWake = Prefs.wake(this) && intent?.getBooleanExtra("mic", false) == true &&
@@ -57,6 +66,7 @@ class HukumService : Service() {
             val api = Api(this)
             scope.launch { listenForRings(api) }
             scope.launch { reportUsage(api) }
+            scope.launch { while (isActive) { delay(2500); try { nm.notify(1, statusNotification()) } catch (e: Exception) {} } }
             androidx.core.content.ContextCompat.registerReceiver(this, unlockReceiver,
                 android.content.IntentFilter(Intent.ACTION_USER_PRESENT), androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         }

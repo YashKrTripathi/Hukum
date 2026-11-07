@@ -110,6 +110,16 @@ class ConvVM(app: Application) : AndroidViewModel(app) {
     private suspend fun turn(text: String, show: Boolean) {
         if (show) messages.add(Msg(true, text))
         status = "thinking…"
+        // Phone-side requests (call, flashlight, alarm, volume, apps ...) are done right here, not on the PC.
+        val local = try { PhoneActions.handle(getApplication(), text) } catch (e: Exception) { "Phone action failed: ${e.message}" }
+        if (local != null) {
+            messages.add(Msg(false, local))
+            status = "speaking… (tap to interrupt)"
+            val sj0 = viewModelScope.launch { voice.speak(local) }
+            speakJob = sj0
+            sj0.join()
+            return
+        }
         val r = try {
             withContext(Dispatchers.IO) { api.chat(text) }
         } catch (e: kotlinx.coroutines.CancellationException) {

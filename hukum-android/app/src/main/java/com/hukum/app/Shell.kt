@@ -60,7 +60,8 @@ fun Shell(ringReason: String?, consumeRing: () -> Unit) {
         if (Prefs.configured(ctx) && Prefs.wake(ctx)) try { HukumService.start(ctx, mic = true) } catch (e: Exception) {}
     }
     LaunchedEffect(Unit) {
-        val need = listOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.POST_NOTIFICATIONS)
+        val need = listOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.POST_NOTIFICATIONS,
+            android.Manifest.permission.READ_CONTACTS, android.Manifest.permission.CALL_PHONE)
             .filter { ctx.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
         if (need.isNotEmpty() && Prefs.configured(ctx) && Prefs.wake(ctx)) perms.launch(need.toTypedArray())
     }

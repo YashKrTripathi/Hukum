@@ -12,6 +12,9 @@ object Prefs {
     fun serverVoice(c: Context): Boolean = sp(c).getBoolean("server_voice", true)
 
     fun wake(c: Context): Boolean = sp(c).getBoolean("wake", true)
+    /** Listen for the wake word only while the phone is locked / screen off (less ambient listening). */
+    fun wakeLockedOnly(c: Context): Boolean = sp(c).getBoolean("wake_locked_only", false)
+    fun setWakeLockedOnly(c: Context, on: Boolean) = sp(c).edit().putBoolean("wake_locked_only", on).apply()
     fun setWake(c: Context, on: Boolean) = sp(c).edit().putBoolean("wake", on).apply()
     fun history(c: Context): List<String> = (sp(c).getString("history", "") ?: "").split("\n").filter { it.isNotBlank() }
     fun setHistory(c: Context, items: List<String>) = sp(c).edit().putString("history", items.take(20).joinToString("\n")).apply()

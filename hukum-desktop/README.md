@@ -41,8 +41,15 @@ API keys and gateway keys are kept in Windows Credential Manager, never in files
 Turn on *Settings > Communication > gateway.link* with the gateway PC key. Jobs from the phone (open, read, run, code, stop,
 command) run through the same permission manager; the phone's approval counts for low/medium/high risk, critical is refused.
 
+## Phone app (Hukum Android 2.0)
+The app's PC tabs (PC, Agents, Tasks, Alerts, More) call this dashboard's API through the gateway: phone -> `POST /api/desktop` ->
+PC job channel (`kind: api`) -> `server.relay()`. Only an allow-list of endpoints is reachable (never Settings, never quit). The
+phone's own confirm dialog counts as approval for low/medium/high actions; critical actions are refused and can only be approved
+at the PC. Needs *gateway.link* on and the PC key set.
+
 ## Tests
 ```
 python -m unittest tests.test_core          # anywhere
 python -m unittest tests.test_live          # on the Windows PC (opens and closes its own Notepad window)
+python -m unittest tests.test_phone_relay   # phone -> gateway -> desktop data path (Windows, needs ../placement-agents)
 ```

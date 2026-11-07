@@ -285,6 +285,10 @@ def approvals_get(q, body):
 @route("POST", "/api/approvals/decide")
 def approvals_decide(q, body):
     try:
+        if body["decision"] == "approve" and getattr(tools.CTX, "phone", False):
+            row = store.one("SELECT risk FROM approvals WHERE id=?", (int(body["id"]),))
+            if row and row["risk"] == "critical":
+                return {"ok": False, "error": "critical actions can only be approved at the PC"}
         ok = permissions.approve(int(body["id"]), body.get("typed", "")) if body["decision"] == "approve" else permissions.reject(int(body["id"]))
         return {"ok": bool(ok)}
     except permissions.Denied as e:
@@ -408,6 +412,73 @@ def integrations_test(q, body):
     return {"ok": agents.drivers().get(t, {}).get("available", False)}
 
 
+# ---------------------------------------------------------------- phone app support
+_chat_results = {}
+
+
+@route("POST", "/api/m/chat")
+def m_chat(q, body):
+    text, cid = (body.get("text") or "").strip(), secrets.token_hex(4)
+    _chat_results[cid] = None
+    for k in list(_chat_results)[:-20]:
+        _chat_results.pop(k, None)
+
+    def work():
+        tools.CTX.phone = True
+        try:
+            r = commander.handle(text, source="phone", preapproved=True, actor="phone")
+            _chat_results[cid] = {"reply": r["reply"], "via": r["via"], "steps": [{k: v for k, v in s.items() if k in ("tool", "ok", "risk")} for s in r["steps"]]}
+        except Exception as e:
+            _chat_results[cid] = {"reply": f"Something went wrong: {e}", "via": "error", "steps": []}
+    threading.Thread(target=work, daemon=True).start()
+    return {"id": cid}
+
+
+@route("GET", "/api/m/chat_result")
+def m_chat_result(q, body):
+    r = _chat_results.get(q.get("id", [""])[0], "missing")
+    return {"done": r is not None and r != "missing", **(r if isinstance(r, dict) else {})}
+
+
+@route("GET", "/api/m/home")
+def m_home(q, body):
+    o = overview(q, body)
+    return {"cpu": o["system"]["cpu"], "ram": o["system"]["ram"], "gpu": o["system"].get("gpu"), "battery": o["system"].get("battery"),
+            "summary": o["system"]["summary"], "findings": o["system"]["findings"], "monitor": o["monitor"]["mode"],
+            "context": o["context"], "observations": o["observations"][:6], "notif": o["notifications"], "agents": o["agents"][:5],
+            "tasks": o["tasks"], "approvals": o["approvals"], "estop": o["estop"], "ai": o["ai"], "pc": os.environ.get("COMPUTERNAME", "PC")}
+
+
+PHONE_GET = {"overview", "apps", "monitor", "projects", "agents", "agents/job", "tasks", "memory", "notifications", "activity", "approvals", "workflows",
+             "system", "integrations", "windows", "servers", "m/home", "m/chat_result", "whatsapp", "audit"}
+PHONE_POST = {"apps/action", "monitor/control", "agents/run", "agents/cancel", "tasks", "tasks/update", "tasks/delete", "memory", "memory/forget",
+              "notifications/ack", "approvals/decide", "estop", "whatsapp/send", "workflows/action", "system/kill", "tools/call", "briefing", "m/chat",
+              "projects/scan", "monitor/look"}
+
+
+def relay(args):
+    """Answer an API request that the phone sent through the gateway. Only an allow-list of endpoints (never settings, never quit)."""
+    method, path = args.get("method", "GET"), urllib.parse.urlparse(args.get("path", ""))
+    name = path.path.removeprefix("/api/")
+    if name not in (PHONE_POST if method == "POST" else PHONE_GET):
+        return json.dumps({"status": 403, "data": {"error": f"'{name}' is not available from the phone"}})
+    fn = ROUTES.get((method, "/api/" + name))
+    tools.CTX.phone = True
+    try:
+        data = fn(urllib.parse.parse_qs(path.query), args.get("body") or {})
+        status = 200
+    except KeyError as e:
+        status, data = 400, {"error": f"missing field {e}"}
+    except (ValueError, LookupError, permissions.Denied) as e:
+        status, data = 400, {"error": str(e)}
+    except Exception as e:
+        status, data = 500, {"error": f"{type(e).__name__}: {e}"}
+    finally:
+        tools.CTX.phone = False
+    store.audit("phone", "api", f"{method} {name}", "low", "allowed")
+    return json.dumps({"status": status, "data": data}, ensure_ascii=False, default=str)
+
+
 # ---------------------------------------------------------------- phone jobs (gateway job channel)
 def execute_job(kind, args, jid):
     """Run a job that arrived from the phone. The phone's own approval counts as Boss's approval for low/medium/high risk
@@ -420,6 +491,8 @@ def execute_job(kind, args, jid):
         if not r["ok"]:
             raise RuntimeError(r["error"])
         return commander._fmt({"tool": tool}, r)
+    if kind == "api":
+        return relay(args)
     if kind == "open":
         t = args["target"]
         return go("web_open", {"url": t}) if t.startswith("http") else go("app_launch", {"name": t})

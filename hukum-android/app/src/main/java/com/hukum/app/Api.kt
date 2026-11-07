@@ -62,6 +62,20 @@ class Api(private val ctx: Context) {
         }
     }
 
+    /** Calls Hukum Desktop's dashboard API on the PC, relayed by the gateway. Returns the `data` object/array as JSON text. */
+    fun desktop(method: String, path: String, body: JSONObject? = null): String {
+        val payload = JSONObject().put("method", method).put("path", path).put("body", body ?: JSONObject()).toString().toRequestBody(json)
+        http.newCall(req("/api/desktop").post(payload).build()).execute().use { r ->
+            val s = r.body?.string() ?: ""
+            if (!r.isSuccessful) fail(r.code, s)
+            val j = JSONObject(s)
+            val status = j.optInt("status", 200)
+            val data = j.opt("data")
+            if (status >= 400) throw IOException((data as? JSONObject)?.optString("error")?.ifBlank { null } ?: "PC error $status")
+            return data?.toString() ?: "{}"
+        }
+    }
+
     fun phoneState(state: String, app: String) {
         val body = JSONObject().put("state", state).put("app", app).toString().toRequestBody(json)
         http.newCall(req("/api/phone_state").post(body).build()).execute().close()

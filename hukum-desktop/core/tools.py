@@ -10,6 +10,8 @@ from . import store, permissions, winapi, apps, uia, screen, sysmon, projects, a
 
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 TOOLS = {}
+import threading
+CTX = threading.local()          # CTX.phone = True while serving a request relayed from the phone app
 
 
 def tool(name, action, desc, params=None, summary=None):
@@ -299,6 +301,12 @@ def call(name, args=None, actor="hukum", preapproved=False, source="local"):
     args = dict(args or {})
     summ = t["summary"](args) if t["summary"] else f"{t['desc']} {args if args else ''}".strip()
     risk = permissions.risk_of(t["action"], {"command": args.get("command", "")} if name == "shell_run" else args)
+    if getattr(CTX, "phone", False):
+        # the phone app shows the exact action and asks before sending it, so that counts as Boss's approval for
+        # low/medium/high risk; critical actions must be done at the PC
+        if risk == "critical":
+            return {"ok": False, "tool": name, "risk": risk, "denied": True, "error": "critical actions cannot be started from the phone"}
+        preapproved, source = True, "phone"
     try:
         res = permissions.run(actor, t["action"], args, lambda: t["fn"](**args), summary=summ, preapproved=preapproved, source=source)
         return {"ok": True, "tool": name, "risk": risk, "result": res}

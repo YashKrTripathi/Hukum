@@ -76,7 +76,8 @@ def _run_job(job, execute):
     try:
         out = execute(job["kind"], job.get("args") or {}, jid)
         if out is not None:                         # long jobs (code) report their own progress
-            _req("POST", "/api/pc/result", {"id": jid, "status": "done", "output": str(out)[-3500:]}, key_kind="pc")
+            cap = 400000 if job["kind"] == "api" else 3500
+            _req("POST", "/api/pc/result", {"id": jid, "status": "done", "output": str(out)[-cap:]}, key_kind="pc", timeout=40)
     except Exception as e:
         try:
             _req("POST", "/api/pc/result", {"id": jid, "status": "failed", "output": f"{type(e).__name__}: {e}"}, key_kind="pc")

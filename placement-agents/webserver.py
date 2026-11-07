@@ -140,7 +140,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": ok})
             except Exception as e:
                 return self._json(500, {"error": str(e)[:200]})
-        if self.path not in ("/api/chat", "/api/tts", "/api/phone_state", "/api/tool", "/api/inbox", "/api/notify"):
+        if self.path not in ("/api/chat", "/api/tts", "/api/phone_state", "/api/tool", "/api/inbox", "/api/notify", "/api/desktop"):
             return self._json(404, {})
         if not self._authed():
             return self._json(401, {"error": "unauthorized"})
@@ -164,6 +164,22 @@ class H(BaseHTTPRequestHandler):
                                   str(m.get("text", "")), float(m.get("ts") or 0) / 1000 or None,
                                   str(m.get("key", "")), bool(m.get("can_reply")))
                 return self._json(200, {"ok": True})
+            if self.path == "/api/desktop":                 # phone app -> Hukum Desktop dashboard API, relayed through the PC job channel
+                if not pcbridge.online():
+                    return self._json(503, {"error": "PC is offline (Hukum Desktop is not running or the phone link is off)"})
+                args = {"method": "POST" if str(body.get("method", "GET")).upper() == "POST" else "GET",
+                        "path": str(body.get("path", ""))[:300], "body": body.get("body") or {}}
+                job = pcbridge.submit("api", args)
+                done = pcbridge.wait_for(job["id"], 28)
+                pcbridge.discard(job["id"])
+                if done["status"] in ("queued", "sent", "running"):
+                    return self._json(504, {"error": "PC did not answer in time"})
+                if done["status"] != "done":
+                    return self._json(502, {"error": done["output"][-300:] or "PC could not run that"})
+                try:
+                    return self._json(200, json.loads(done["output"]))
+                except Exception:
+                    return self._json(502, {"error": "PC answer was too large or malformed"})
             if self.path == "/api/notify":                  # desktop -> phone alert
                 push_event("nudge", str(body.get("text", ""))[:300])
                 return self._json(200, {"ok": True})

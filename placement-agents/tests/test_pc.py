@@ -72,6 +72,30 @@ class PCTests(unittest.TestCase):
                                      {"X-Key": webserver.key(), "Content-Type": "application/json"})
         self.assertTrue(json.loads(urllib.request.urlopen(req).read())["ok"])
         self.assertTrue(any(e["type"] == "nudge" and "build failed on PC" in e["text"] for e in webserver._events))
+        # phone -> desktop API relay: a stand-in desktop answers 'api' jobs on the PC channel
+        orig_handle = agent.handle
+        def stand_in(job):
+            if job["kind"] == "api":
+                agent.report(job["id"], "done", json.dumps({"status": 200, "data": {"echo": job["args"]["path"], "big": "x" * 20000}}))
+            else:
+                orig_handle(job)
+        agent.handle = stand_in
+        def desktop(path):
+            req = urllib.request.Request(cfg["gateway"] + "/api/desktop", json.dumps({"method": "GET", "path": path}).encode(),
+                                         {"X-Key": webserver.key(), "Content-Type": "application/json"})
+            return json.loads(urllib.request.urlopen(req, timeout=40).read())
+        got = None
+        for _ in range(10):
+            try:
+                got = desktop("/api/m/home"); break
+            except Exception:
+                time.sleep(0.5)
+        self.assertEqual(got["status"], 200); self.assertEqual(got["data"]["echo"], "/api/m/home")
+        self.assertEqual(len(got["data"]["big"]), 20000)                      # large answers survive the relay
+        self.assertFalse([j for j in pcbridge._jobs.values() if j["kind"] == "api"])   # and are not kept
+        req = urllib.request.Request(cfg["gateway"] + "/api/desktop", b"{}", {"Content-Type": "application/json"})
+        with self.assertRaises(urllib.error.HTTPError) as cm: urllib.request.urlopen(req)
+        self.assertEqual(cm.exception.code, 401)
 
 
 if __name__ == "__main__":

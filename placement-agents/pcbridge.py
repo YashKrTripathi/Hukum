@@ -40,7 +40,7 @@ def online() -> bool:
 
 def _save():
     try:
-        db.put("pc_jobs", json.dumps([_jobs[i] for i in _order[-30:]], ensure_ascii=False))
+        db.put("pc_jobs", json.dumps([_jobs[i] for i in _order[-30:] if _jobs[i]["kind"] != "api"], ensure_ascii=False))
     except Exception:
         pass
 
@@ -88,6 +88,14 @@ def wait_for(jid: str, seconds: float) -> dict:
         return dict(_jobs[jid])
 
 
+def discard(jid: str):
+    """Forget a finished relay job (their results can be large and are not worth keeping)."""
+    with _cv:
+        _jobs.pop(jid, None)
+        if jid in _order:
+            _order.remove(jid)
+
+
 def poll(wait: float = 25.0) -> list:
     """Called by the PC agent: returns queued jobs (marking them sent)."""
     global _last_poll
@@ -116,7 +124,7 @@ def result(jid: str, status: str, output: str):
         if not j or j["status"] in ("done", "failed", "stopped"):
             return False
         j["status"] = status if status in ("running", "done", "failed", "stopped") else "failed"
-        j["output"] = str(output)[-6000:]
+        j["output"] = str(output)[-(400000 if j["kind"] == "api" else 6000):]
         j["updated"] = time.time()
         _save()
         _cv.notify_all()

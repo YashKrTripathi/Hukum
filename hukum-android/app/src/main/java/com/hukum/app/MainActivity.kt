@@ -155,8 +155,9 @@ class MainActivity : ComponentActivity() {
         pendingRing = intent.getStringExtra("ring_reason")
         if (Prefs.configured(this)) try { HukumService.start(this) } catch (e: Exception) {}
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF2F81F7), background = Color(0xFF0F1720))) {
-                Screen(pendingRing) { pendingRing = null }
+            MaterialTheme(colorScheme = darkColorScheme(primary = C.accent, background = C.bg, surface = C.panel, onSurface = C.tx,
+                onBackground = C.tx, secondary = C.accent2, outline = C.line, surfaceVariant = C.card, onSurfaceVariant = C.mut)) {
+                Shell(pendingRing) { pendingRing = null }
             }
         }
     }
@@ -168,10 +169,9 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun Screen(ringReason: String?, consumeRing: () -> Unit) {
+fun Screen(ringReason: String?, consumeRing: () -> Unit, showSetup: Boolean, setShowSetup: (Boolean) -> Unit) {
     val ctx = LocalContext.current
     val vm: ConvVM = viewModel()
-    var showSetup by remember { mutableStateOf(!Prefs.configured(ctx)) }
     val listState = rememberLazyListState()
 
     val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -194,13 +194,13 @@ fun Screen(ringReason: String?, consumeRing: () -> Unit) {
         if (vm.messages.isNotEmpty()) listState.animateScrollToItem(vm.messages.size - 1)
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF0F1720)).padding(16.dp)) {
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Hukum", color = Color.White, fontSize = 24.sp)
+            Text("Talk to Hukum", color = C.tx, fontSize = 20.sp)
             Row {
                 TextButton(onClick = { vm.toggleLang() }) { Text(if (vm.lang == "hi-IN") "हिं / Hinglish" else "English") }
-                TextButton(onClick = { showSetup = true }) { Text("⚙") }
+                TextButton(onClick = { setShowSetup(true) }) { Text("⚙") }
             }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp), state = listState,
@@ -208,34 +208,31 @@ fun Screen(ringReason: String?, consumeRing: () -> Unit) {
             items(vm.messages) { m ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = if (m.mine) Arrangement.End else Arrangement.Start) {
                     Box(Modifier.widthIn(max = 320.dp).clip(RoundedCornerShape(16.dp))
-                        .background(if (m.mine) Color(0xFF1F3A5F) else Color(0xFF18232F)).padding(12.dp)) {
-                        Text(m.text, color = Color.White, fontSize = 16.sp)
+                        .background(if (m.mine) Color(0xFF1B3550) else C.card).padding(12.dp)) {
+                        Text(m.text, color = C.tx, fontSize = 16.sp)
                     }
                 }
             }
         }
-        Text(vm.status, color = Color(0xFF8AA0B4), modifier = Modifier.fillMaxWidth().padding(4.dp),
+        Text(vm.status, color = C.mut, modifier = Modifier.fillMaxWidth().padding(4.dp),
             fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(96.dp).clip(CircleShape)
-                .background(if (vm.active) Color(0xFF2EA043) else Color(0xFF2F81F7))
-                .clickable {
-                    when {
-                        vm.active && vm.status.startsWith("speaking") -> vm.interrupt()
-                        vm.active -> vm.stop()
-                        !Prefs.configured(ctx) -> showSetup = true
-                        hasMic() -> vm.start()
-                        else -> micPerm.launch(Manifest.permission.RECORD_AUDIO)
-                    }
-                }, contentAlignment = Alignment.Center) {
-                Text(if (vm.active) "■" else "🎙", fontSize = 38.sp, color = Color.White)
+        Box(Modifier.fillMaxWidth().height(150.dp).clickable {
+            when {
+                vm.active && vm.status.startsWith("speaking") -> vm.interrupt()
+                vm.active -> vm.stop()
+                !Prefs.configured(ctx) -> setShowSetup(true)
+                hasMic() -> vm.start()
+                else -> micPerm.launch(Manifest.permission.RECORD_AUDIO)
             }
+        }, contentAlignment = Alignment.Center) {
+            Orb(150.dp, active = vm.active)
+            Text(if (vm.active) "■" else "🎙", fontSize = 30.sp, color = Color.White)
         }
         Spacer(Modifier.height(8.dp))
         TypeBar { vm.type(it) }
     }
 
-    if (showSetup) SetupDialog(vm) { showSetup = false }
+    if (showSetup) SetupDialog(vm) { setShowSetup(false) }
 }
 
 @Composable

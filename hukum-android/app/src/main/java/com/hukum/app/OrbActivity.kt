@@ -21,20 +21,34 @@ class OrbActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = C.accent, background = C.bg, surface = C.panel, onSurface = C.tx, onBackground = C.tx)) {
                 val vm: ConvVM = viewModel()
-                vmStop = { vm.stop() }
+                vmRef = vm
                 VoiceOrbScreen(vm, first = cmd, showFirst = cmd != null, autoStart = true, autoClose = true) { vm.stop(); finish() }
             }
         }
     }
 
-    /** Leaving the orb (Home, screen off, another app) ends it, so the wake listener is never left paused. */
+    private var vmRef: ConvVM? = null
+
+    /**
+     * Leaving the orb (Home, screen off, another app opened by a command) ends it so the wake listener is never left paused.
+     * If Hukum is still answering, let the answer finish first; if it is listening, stop the microphone right away.
+     */
     override fun onStop() {
         WakeWord.paused = false
-        if (!isChangingConfigurations) { try { vmStop() } catch (e: Exception) {}; finish() }
+        if (!isChangingConfigurations) {
+            val h = android.os.Handler(android.os.Looper.getMainLooper())
+            fun check(n: Int) {
+                if (isFinishing || isDestroyed) return
+                val v = vmRef
+                val busy = v != null && (v.status.startsWith("speaking") || v.status.startsWith("thinking"))
+                if (!busy || n > 60) { try { v?.stop() } catch (e: Exception) {}; finish() } else h.postDelayed({ check(n + 1) }, 500)
+            }
+            val v = vmRef
+            if (v != null && (v.status.startsWith("listening") || v.status.startsWith("🎙"))) v.stop()      // mic off at once
+            check(0)
+        }
         super.onStop()
     }
-
-    private var vmStop: () -> Unit = {}
 
     override fun onDestroy() {
         WakeWord.paused = false

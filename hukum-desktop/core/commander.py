@@ -68,6 +68,12 @@ def plan_rules(text):
         return [{"tool": "agent_status", "args": {}}]
     if m := _m(r"cancel\s+(?:agent\s+)?job\s+#?(\d+|all)", t) or _m(r"stop (all )?agents()", t):
         return [{"tool": "agent_cancel", "args": {"job_id": m[1] if (m[1] or "").strip() and m[1] != "all " else "all"}}]
+    # "show me Claude's response", "claude ka jawab dikhao", "codex ne kya kaha" (speech often hears Claude as "cloud")
+    if (m := re.search(r"\b(claude|cloud|clod|codex|antigravity|agy)\b|क्लाउड|क्लॉड|कोडेक्स", low)) and not re.match(r"(ask|tell|have|let|open|launch|start|close|quit)\b", low) \
+            and re.search(r"respon|repl(y|ies)|answer|jawa?ab|output|result|said|say|bol|kah[ae]|likh|dikha|padh|bata|show|read|दिखा|पढ़|बता|जवाब|क्या", low):
+        who = m.group(0).lower()
+        who = "claude" if who in ("cloud", "clod", "क्लाउड", "क्लॉड") else "codex" if who in ("कोडेक्स",) else who
+        return [{"tool": "ui_read", "args": {"app": who}}]
     if m := _m(r"(?:send|message|whatsapp|text)\s+(?:a\s+)?(?:whatsapp\s+)?(?:message\s+)?(?:to\s+)?([\w +]+?)\s*(?::|saying|that says|-)\s*(.+)$", t):
         return [{"tool": "msg_send", "args": {"contact": m[1].strip(), "text": m[2].strip()}}]
     if re.search(r"(any )?(new )?(messages|whatsapp)|who messaged|inbox", low):

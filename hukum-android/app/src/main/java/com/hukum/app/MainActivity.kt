@@ -107,6 +107,19 @@ class ConvVM(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Asks the Hukum Desktop command center. Returns its answer, or null when the PC is unreachable or had no plan for it. */
+    private suspend fun pcChat(text: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val id = org.json.JSONObject(api.desktop("POST", "/api/m/chat", org.json.JSONObject().put("text", text))).optString("id")
+            repeat(75) {
+                kotlinx.coroutines.delay(800)
+                val r = org.json.JSONObject(api.desktop("GET", "/api/m/chat_result?id=$id"))
+                if (r.optBoolean("done")) return@withContext if (r.optString("via") in listOf("none", "error")) null else r.optString("reply")
+            }
+            null
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { null }
+    }
+
     private suspend fun turn(text: String, show: Boolean) {
         if (show) messages.add(Msg(true, text))
         status = "thinking…"
@@ -120,8 +133,12 @@ class ConvVM(app: Application) : AndroidViewModel(app) {
             sj0.join()
             return
         }
+        // PC first: its command center can open/read/drive apps (e.g. read Claude's reply). Hukum's own openings ("__...") and
+        // anything the PC does not understand go to the general chat brain.
+        val pc = if (text.startsWith("__")) null else pcChat(text)
         val r = try {
-            withContext(Dispatchers.IO) { api.chat(text) }
+            if (pc != null) Api.Reply(pc, pc.replace(Regex("[*_`#]"), "").take(350))
+            else withContext(Dispatchers.IO) { api.chat(text) }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {

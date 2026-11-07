@@ -61,13 +61,28 @@ fun VoiceOrbScreen(vm: ConvVM, first: String? = null, showFirst: Boolean = false
     }
 
     val st = vm.status
-    val target = when { st.startsWith("speaking") -> 0.9f; st.startsWith("🎙") || st.startsWith("listening") -> 0.65f; st.startsWith("thinking") -> 0.45f; else -> 0.12f }
-    val energy by animateFloatAsState(target, label = "energy")
+    // The orb follows the real microphone loudness while you speak, and pulses while Hukum answers.
+    var live0 by remember { mutableStateOf(0.12f) }
+    LaunchedEffect(Unit) {
+        var t = 0f; var sm = 0f
+        while (true) {
+            delay(45); t += 0.045f
+            val s = vm.status
+            val target = when {
+                s.startsWith("speaking") -> 0.55f + 0.35f * Math.abs(Math.sin(t * 3.2)).toFloat()
+                s.startsWith("🎙") || s.startsWith("listening") -> { sm += (vm.voice.level - sm) * 0.45f; 0.15f + 0.85f * sm }
+                s.startsWith("thinking") -> 0.35f + 0.1f * Math.sin(t * 2.0).toFloat()
+                else -> { sm = 0f; 0.12f }
+            }
+            live0 += (target - live0) * 0.35f
+        }
+    }
+    val energy = live0
     val live = if (st.startsWith("🎙")) st.removePrefix("🎙").trim() else ""
     val lastHukum = vm.messages.lastOrNull { !it.mine }?.text
     val lastMine = vm.messages.lastOrNull { it.mine }?.text
 
-    HudBackground {
+    Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(14.dp))
             Text("Hukum", color = C.onAccent, fontSize = 13.sp, modifier = Modifier.clip(RoundedCornerShape(50)).background(C.accent).padding(horizontal = 18.dp, vertical = 6.dp))

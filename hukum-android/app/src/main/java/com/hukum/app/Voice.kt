@@ -20,6 +20,8 @@ import kotlin.coroutines.resume
 /** Ears (speech recognition) and mouth (server neural voice, falling back to the phone's own TTS). */
 class Voice(private val ctx: Context, private val api: Api) {
     var lastError: String? = null
+    /** Live microphone loudness 0..1 (drives the orb). */
+    @Volatile var level = 0f
     private var rec: SpeechRecognizer? = null
     private var player: MediaPlayer? = null
     private var tts: TextToSpeech? = null
@@ -67,7 +69,7 @@ class Voice(private val ctx: Context, private val api: Api) {
                 }
                 override fun onReadyForSpeech(params: Bundle?) {}
                 override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onRmsChanged(rmsdB: Float) { level = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {}
                 override fun onEvent(eventType: Int, params: Bundle?) {}

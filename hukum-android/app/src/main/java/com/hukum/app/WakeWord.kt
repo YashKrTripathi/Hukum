@@ -102,6 +102,11 @@ class WakeWord(private val ctx: Context) {
             val app = ctx.applicationContext
             val i = Intent(app, OrbActivity::class.java).putExtra("cmd", cmd).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             val pi = PendingIntent.getActivity(app, 70, i, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            try {   // wake the display (the orb activity then shows over the lock screen)
+                @Suppress("DEPRECATION")
+                (app.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).newWakeLock(
+                    android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or android.os.PowerManager.ON_AFTER_RELEASE, "hukum:orb").acquire(12_000)
+            } catch (e: Exception) { lastError = "wake screen: ${e.message}" }
             val nm = app.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(NotificationChannel(CH, "Hukum wake word", NotificationManager.IMPORTANCE_HIGH).apply {
                 setSound(null, null); enableVibration(false); lockscreenVisibility = Notification.VISIBILITY_PUBLIC

@@ -21,10 +21,20 @@ class OrbActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = C.accent, background = C.bg, surface = C.panel, onSurface = C.tx, onBackground = C.tx)) {
                 val vm: ConvVM = viewModel()
+                vmStop = { vm.stop() }
                 VoiceOrbScreen(vm, first = cmd, showFirst = cmd != null, autoStart = true, autoClose = true) { vm.stop(); finish() }
             }
         }
     }
+
+    /** Leaving the orb (Home, screen off, another app) ends it, so the wake listener is never left paused. */
+    override fun onStop() {
+        WakeWord.paused = false
+        if (!isChangingConfigurations) { try { vmStop() } catch (e: Exception) {}; finish() }
+        super.onStop()
+    }
+
+    private var vmStop: () -> Unit = {}
 
     override fun onDestroy() {
         WakeWord.paused = false

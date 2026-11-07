@@ -22,6 +22,7 @@ class WakeWord(private val ctx: Context) {
     private val handler = Handler(Looper.getMainLooper())
     private var rec: SpeechRecognizer? = null
     @Volatile private var running = false
+    private var pausedAt = 0L
 
     fun start() { if (running) return; running = true; state = "starting"; handler.post { try { loop() } catch (e: Throwable) { state = "crashed: ${e.javaClass.simpleName} ${e.message}" } } }
     fun stop() { running = false; handler.post { destroy() } }
@@ -32,7 +33,11 @@ class WakeWord(private val ctx: Context) {
 
     private fun loop() {
         if (!running) return
-        if (paused) { state = "paused (orb open)"; again(1200); return }
+        if (paused) {
+            if (pausedAt == 0L) pausedAt = System.currentTimeMillis()
+            if (System.currentTimeMillis() - pausedAt > 45_000) paused = false      // never stay deaf if the orb was left open
+            else { state = "paused (orb open)"; again(1200); return }
+        } else pausedAt = 0L
         if (Prefs.wakeLockedOnly(ctx)) {
             val pm = ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
             val km = ctx.getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
@@ -114,6 +119,7 @@ class WakeWord(private val ctx: Context) {
             nm.notify(ID, Notification.Builder(app, CH).setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Hukum")
                 .setContentText("Listening…").setCategory(Notification.CATEGORY_CALL).setAutoCancel(true).setTimeoutAfter(15_000)
                 .setContentIntent(pi).setFullScreenIntent(pi, true).build())
+            try { pi.send() } catch (e: Exception) { lastError = "pending intent: ${e.message}" }
             try { app.startActivity(i); lastError = "" } catch (e: Exception) { lastError = "open orb: ${e.javaClass.simpleName} ${e.message}" }
         }
 

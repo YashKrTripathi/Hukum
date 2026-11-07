@@ -46,7 +46,7 @@ class HukumService : Service() {
         val n = statusNotification()
         // The microphone foreground type may only be started while the app is on screen (Android 14), so a restart without the
         // "mic" extra (boot, system restart) keeps the guard but leaves the wake word off until Hukum is opened again.
-        val wantWake = Prefs.wake(this) && intent?.getBooleanExtra("mic", false) == true &&
+        val wantWake = Prefs.wake(this) &&
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
         var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         if (wantWake) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE

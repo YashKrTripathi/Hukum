@@ -75,6 +75,13 @@ fun VoicePage() {
             Mut("• While you are using the phone, some versions show a banner instead of the full screen.")
             Mut("• Needs: microphone, notifications, full-screen notifications, battery set to Unrestricted.")
         }
+        Panel(hot = !Settings.canDrawOverlays(ctx)) {
+            Title("Open the orb by itself (important)")
+            Row { Chip(if (Settings.canDrawOverlays(ctx)) "display over other apps: allowed" else "display over other apps: OFF - orb only shows as a tap-banner", if (Settings.canDrawOverlays(ctx)) C.ok else C.warn) }
+            Mut("Android only lets Hukum open the orb on its own, on the lock screen or over another app, when this is allowed. Without it you must tap the Listening banner.", Modifier.padding(top = 6.dp))
+            Spacer(Modifier.height(6.dp))
+            Btn("Allow display over other apps", primary = !Settings.canDrawOverlays(ctx)) { open(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + ctx.packageName))) }
+        }
         Panel {
             Title("Send WhatsApp messages by voice")
             Row { Chip(if (HukumAccess.enabled(ctx)) "send button: allowed" else "send button: off", if (HukumAccess.enabled(ctx)) C.ok else C.warn) }

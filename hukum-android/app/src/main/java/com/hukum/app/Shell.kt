@@ -111,6 +111,15 @@ fun Shell(ringReason: String?, consumeRing: () -> Unit) {
         }
     }
 
+    var overlayAsk by remember { mutableStateOf(true) }
+    if (overlayAsk && Prefs.configured(ctx) && Prefs.wake(ctx) && !android.provider.Settings.canDrawOverlays(ctx)) {
+        AlertDialog(onDismissRequest = { overlayAsk = false }, containerColor = C.panel, titleContentColor = C.tx, textContentColor = C.mut,
+            title = { Text("Let Hukum open by itself") },
+            text = { Text("To show the orb the moment you say Hukum, even on the lock screen, Android needs \"Display over other apps\" turned on for Hukum.") },
+            confirmButton = { TextButton(onClick = { overlayAsk = false
+                try { ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + ctx.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) {} }) { Text("Allow", color = C.accent) } },
+            dismissButton = { TextButton(onClick = { overlayAsk = false }) { Text("Later", color = C.mut) } })
+    }
     if (voice) VoiceOrbScreen(conv, first = ringReason?.let { "__ring__:$it" }, autoStart = ringReason != null) { voice = false; consumeRing() }
     if (showSetup) SetupDialog(conv) { showSetup = false }
 

@@ -48,6 +48,20 @@ object PhoneActions {
         val t = normalize(raw.trim())
         val l = t.lowercase()
         if (l.isBlank() || l.startsWith("__")) return null
+        // passwords are answered here and never forwarded to the PC, the gateway or an AI model
+        if (Regex("pass ?word|passcode|पासवर्ड|पासकोड").containsMatchIn(l)) {
+            val names = Vault.labels(ctx)
+            val wantsRead = Regex("\\b(tell|say|read|show|what is|what's|bata|bol|batao)\\b|बता|बोल|दिखा").containsMatchIn(l) && !Regex("\\b(do i|have|saved|any|which|list|kaun|konsa)\\b|कौन|कौनसे").containsMatchIn(l)
+            val asked = names.filter { n -> l.contains(n.lowercase()) }
+            return when {
+                Regex("\\b(save|store|add|remember|set|yaad|save kar)\\b|सेव|याद").containsMatchIn(l) ->
+                    "I never take passwords by voice. Open More, then Passwords, and type it there. It stays encrypted on this phone."
+                wantsRead -> "I will not read a password aloud or show it. It is only typed into an app after you confirm with your fingerprint."
+                asked.isNotEmpty() -> "Yes, a ${asked.joinToString(" and ")} password is saved on this phone."
+                names.isEmpty() -> "No passwords are saved yet. Add one in More, then Passwords."
+                else -> "Saved passwords: ${names.joinToString(", ")}."
+            }
+        }
         if (PC.containsMatchIn(l)) return null
         val phone = PHONE.containsMatchIn(l)
 

@@ -19,11 +19,24 @@ object PhoneAgent {
     private suspend fun loop(ctx: Context, api: Api, goal: String, progress: (String) -> Unit): String {
         val acc = HukumAccess.instance ?: return "Hukum phone control is not running. Turn it on in More > Voice & wake word > Accessibility settings."
         val history = ArrayList<String>()
+        val filled = HashSet<String>()
         var same = 0; var lastScreen = ""
         for (step in 1..MAX_STEPS) {
             delay(if (step == 1) 500 else 1100)
             val snap = acc.snapshot()
-            if (snap.hasPassword) return "A password field is on screen. Please enter it yourself, then ask me to continue."
+            if (snap.hasPassword) {
+                val appName = try { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(snap.pkg, 0)).toString() } catch (e: Exception) { snap.pkg }
+                if (snap.pkg in filled) return "The password box is still showing. Please check it yourself, then ask me to continue."
+                val label = Vault.find(ctx, appName, snap.pkg, goal)
+                    ?: return "$appName is asking for a password and none is saved for it. Add one in More > Passwords, or enter it yourself."
+                progress("Confirm with your fingerprint to use the saved $label password")
+                if (!Auth.user(ctx, "Hukum wants to fill your $label password", "Confirm it is you. The password is typed straight into the app and is never shown or sent anywhere.")) return "Not confirmed, so I did not fill the password."
+                val ok = Vault.get(ctx, label)?.let { acc.fillPassword(it) } ?: false
+                if (!ok) return "I could not fill the password. Please enter it yourself."
+                filled.add(snap.pkg)
+                history.add("filled the saved $label password (hidden)")
+                continue
+            }
             same = if (snap.text == lastScreen) same + 1 else 0
             lastScreen = snap.text
             if (same >= 4) return "The screen is not changing, so I stopped. Tell me what to try."

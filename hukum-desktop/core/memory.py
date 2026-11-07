@@ -13,6 +13,8 @@ def remember(text, kind="fact", project="", pinned=False):
         raise ValueError("nothing to remember")
     if kind not in ("fact", "pref", "decision", "objective", "workflow"):
         kind = "fact"
+    if re.search(r"(?i)\b(pass(word|code)?|pwd|pin|otp|cvv)\b\s*(is|=|:|hai|है)?\s*\S+|पासवर्ड", text):
+        raise ValueError("Passwords, PINs and OTPs are never saved in memory (it is plain text and can reach AI prompts). Save it in the phone app: More > Passwords.")
     from .redact import redact
     text = redact(text)[:500]
     store.x("INSERT OR IGNORE INTO memory(kind,text,project,ts,pinned) VALUES(?,?,?,?,?)", (kind, text, project, time.time(), int(pinned)))

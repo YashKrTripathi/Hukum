@@ -274,14 +274,14 @@ fun MoreScreen(vm: DeskVM, onConnection: () -> Unit) {
         Page {
             H("More", "Everything on your PC")
             MenuList(listOf("apps" to "📱  Applications", "projects" to "📁  Projects", "system" to "📊  System & processes", "monitor" to "👁  Live monitor", "whatsapp" to "💬  WhatsApp",
-                "voice" to "🎙  Voice & wake word", "alerts" to "🔔  Alerts", "memory" to "🧠  Memory", "automation" to "⚙  Automation", "security" to "🛡  Approvals & audit", "connection" to "🔗  Connection & permissions")) { if (it == "connection") onConnection() else sub = it }
+                "voice" to "🎙  Voice & wake word", "alerts" to "🔔  Alerts", "memory" to "🧠  Memory", "vault" to "🔐  Passwords","automation" to "⚙  Automation", "security" to "🛡  Approvals & audit", "connection" to "🔗  Connection & permissions")) { if (it == "connection") onConnection() else sub = it }
         }
     } else {
         Column(Modifier.fillMaxSize()) {
             Btn("‹ Back", Modifier.padding(start = 16.dp, top = 8.dp)) { sub = null }
             when (sub) {
                 "apps" -> AppsPage(vm); "projects" -> ProjectsPage(vm); "system" -> SystemPage(vm); "monitor" -> MonitorPage(vm)
-                "whatsapp" -> WhatsPage(vm); "voice" -> VoicePage(); "alerts" -> AlertsScreen(vm); "memory" -> MemoryPage(vm); "automation" -> AutomationPage(vm); "security" -> SecurityPage(vm)
+                "whatsapp" -> WhatsPage(vm); "voice" -> VoicePage(); "alerts" -> AlertsScreen(vm); "memory" -> MemoryPage(vm); "vault" -> VaultPage();"automation" -> AutomationPage(vm); "security" -> SecurityPage(vm)
             }
         }
     }

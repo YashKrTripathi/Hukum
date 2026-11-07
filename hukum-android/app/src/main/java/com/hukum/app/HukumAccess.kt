@@ -121,6 +121,21 @@ class HukumAccess : AccessibilityService() {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value) })
     }
 
+    /** Types a saved password into the visible password box. The value is never logged or returned. */
+    fun fillPassword(secret: String): Boolean {
+        fun find(n: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+            if (n == null || !n.isVisibleToUser) return null
+            if (n.isPassword) return n
+            for (c in 0 until n.childCount) find(n.getChild(c))?.let { return it }
+            return null
+        }
+        val node = find(rootInActiveWindow) ?: return false
+        node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, android.os.Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, secret) })
+    }
+
     /** Press the keyboard's search / enter key in the focused text box. */
     fun enter(): Boolean {
         val f = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false

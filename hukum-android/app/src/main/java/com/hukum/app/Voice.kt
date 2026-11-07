@@ -42,7 +42,7 @@ class Voice(private val ctx: Context, private val api: Api) {
         suspendCancellableCoroutine { cont ->
             val r = SpeechRecognizer.createSpeechRecognizer(ctx)
             rec = r
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            val intent = autoLanguage(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
@@ -84,6 +84,15 @@ class Voice(private val ctx: Context, private val api: Api) {
     }
 
     companion object {
+        /** Let the phone's recogniser pick the language itself (Hindi / English / Hinglish) where it supports it (Android 13+). */
+        fun autoLanguage(i: Intent): Intent {
+            val langs = arrayListOf("hi-IN", "en-IN", "en-US")
+            i.putExtra("android.speech.extra.ENABLE_LANGUAGE_DETECTION", true)
+            i.putStringArrayListExtra("android.speech.extra.LANGUAGE_DETECTION_ALLOWED_LANGUAGES", langs)
+            i.putExtra("android.speech.extra.ENABLE_LANGUAGE_SWITCH", "quick_response")
+            i.putStringArrayListExtra("android.speech.extra.LANGUAGE_SWITCH_ALLOWED_LANGUAGES", langs)
+            return i
+        }
         /** Saying "over" (or ओवर) at the end of a command closes the microphone. */
         val OVER = Regex("(?i)(?:^|\\s)(?:over|ओवर)[\\s.!।]*$")
     }

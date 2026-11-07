@@ -25,8 +25,10 @@ object PhoneActions {
 
     /** Returned by handle() when the request is a multi-step job for PhoneAgent. */
     const val AGENT = "@@agent"
-    private val INSTALL = Regex("(?i)\b(install|uninstall|download)\b|इंस्टॉल|इन्स्टॉल|डाउनलोड|अनइंस्टॉल")
-    private val ACT_AFTER_APP = Regex("(?i)\b(search|find|play|watch|type|go to|scroll|subscribe|like|follow|post|share|book|order|login|log in|sign in|turn on|turn off|enable|disable|set|change|update)\b|सर्च|ढूंढ|खोज|चलाओ|बजाओ|देखो|चालू करो|बंद करो")
+    private val INSTALL = Regex("(?i)\\b(install|uninstall|download)\\b|इंस्टॉल|इन्स्टॉल|डाउनलोड|अनइंस्टॉल")
+    private val ACT_AFTER_APP = Regex("(?i)\\b(search|find|play|watch|type|go to|scroll|subscribe|like|follow|post|share|book|order|login|log in|sign in|turn on|turn off|enable|disable|set|change|update)\\b|सर्च|ढूंढ|खोज|चलाओ|बजाओ|देखो|चालू करो|बंद करो")
+
+    private val ACTION_ANY = Regex("(?i)\\b(search|google|youtube|play|watch|go to|open|scroll|tap|click|press|subscribe|unsubscribe|follow|unfollow|like|share|post|book|order|turn on|turn off|switch on|switch off|enable|disable|toggle|set|change|update|uninstall|install|download|login|log in|sign in|sign out|log out|clear|delete|find|show me|take a)\\b|सर्च|ढूंढ|खोज|चलाओ|बजाओ|देखो|चालू करो|बंद करो|खोलो|दिखाओ")
 
     fun openApp(ctx: Context, name: String): Boolean {
         val app = findApp(ctx, name) ?: return false
@@ -132,7 +134,7 @@ object PhoneActions {
             val name = open.replace(Regex("(?i)\\b(on|in|my|the|phone|mobile|app)\\b|पर|में|मेरे|फोन|मोबाइल"), " ").trim()
             val app = findApp(ctx, name)
             val extra = if (app != null) name.lowercase().replace(app.second.lowercase(), " ").trim() else ""
-            if (app != null && extra.length >= 3 && (ACT_AFTER_APP.containsMatchIn(extra) || Regex("(?i)^(and|then|aur|फिर|और)\b").containsMatchIn(extra))) return AGENT
+            if (app != null && extra.length >= 3 && (ACT_AFTER_APP.containsMatchIn(extra) || Regex("(?i)^(and|then|aur|फिर|और)(?=\\s|$)").containsMatchIn(extra))) return AGENT
             if (app != null && (phone || PHONE_FIRST.any { app.second.lowercase().contains(it) })) {
                 val i = ctx.packageManager.getLaunchIntentForPackage(app.first)
                 if (i != null && launch(ctx, i)) return "Opening ${app.second}."
@@ -149,6 +151,9 @@ object PhoneActions {
                 return if (launch(ctx, Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, q))) "Searching for $q." else null
             }
         }
+        // anything else that is an action for the phone (not a question, not about the PC): let the phone agent work it out
+        val question = Regex("(?i)^(what|why|how|who|when|where|kya|kyun|kaise|kaun|kab|kahan|क्या|क्यों|कैसे|कौन|कब|कहाँ)(?=\\s|$)").containsMatchIn(l) || l.contains("?")
+        if (!question && ACTION_ANY.containsMatchIn(l)) return AGENT
         return null
     }
 

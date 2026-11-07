@@ -40,8 +40,8 @@ class OrbActivity : ComponentActivity() {
             fun check(n: Int) {
                 if (isFinishing || isDestroyed) return
                 val v = vmRef
-                val busy = v != null && (v.status.startsWith("speaking") || v.status.startsWith("thinking"))
-                if (!busy || n > 60) { try { v?.stop() } catch (e: Exception) {}; finish() } else h.postDelayed({ check(n + 1) }, 500)
+                val busy = v != null && (v.status.startsWith("speaking") || v.status.startsWith("thinking") || v.status.startsWith("working"))
+                if (!busy || n > 360) { try { v?.stop() } catch (e: Exception) {}; finish() } else h.postDelayed({ check(n + 1) }, 500)
             }
             val v = vmRef
             if (v != null && (v.status.startsWith("listening") || v.status.startsWith("🎙"))) v.stop()      // mic off at once

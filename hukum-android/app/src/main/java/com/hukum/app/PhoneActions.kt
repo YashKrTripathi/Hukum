@@ -23,6 +23,17 @@ object PhoneActions {
     private val WA = Regex("(?i)whats ?app|व्हाट्सएप|व्हाट्सऐप|वॉट्सऐप|वाट्सएप|व्हाट्स ऐप|व्हाट्स एप|वॉट्सएप")
     private val FILLER = Regex("(?i)\\b(whats ?app|open|and|message|msg|text|send|to|ko|par|pe|on|in|my|phone|mobile|bhejo|bhej|do|kar|karo|kardo|bolo|kaho|please|a|the|call|dial|ki|that|saying)\\b|व्हाट्सएप|व्हाट्सऐप|वॉट्सऐप|वाट्सएप|मैसेज|संदेश|को|पर|पे|में|भेजो|भेज|दो|कर|करो|बोलो|कहो|फोन|फ़ोन|कॉल|लगाओ|मिलाओ|मोबाइल")
 
+    /** Returned by handle() when the request is a multi-step job for PhoneAgent. */
+    const val AGENT = "@@agent"
+    private val INSTALL = Regex("(?i)\b(install|uninstall|download)\b|इंस्टॉल|इन्स्टॉल|डाउनलोड|अनइंस्टॉल")
+    private val ACT_AFTER_APP = Regex("(?i)\b(search|find|play|watch|type|go to|scroll|subscribe|like|follow|post|share|book|order|login|log in|sign in|turn on|turn off|enable|disable|set|change|update)\b|सर्च|ढूंढ|खोज|चलाओ|बजाओ|देखो|चालू करो|बंद करो")
+
+    fun openApp(ctx: Context, name: String): Boolean {
+        val app = findApp(ctx, name) ?: return false
+        val i = ctx.packageManager.getLaunchIntentForPackage(app.first) ?: return false
+        return launch(ctx, i)
+    }
+
     private fun launch(ctx: Context, i: Intent): Boolean = try { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (e: Exception) { false }
     private fun has(ctx: Context, p: String) = ctx.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
 
@@ -113,12 +124,15 @@ object PhoneActions {
             return if (launch(ctx, Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${c.second}")).putExtra("sms_body", body))) "Message to ${c.first} is ready: tap send." else "I could not open messages."
         }
 
+        if (INSTALL.containsMatchIn(l)) return AGENT
         // opening an app: phone-first apps need no "phone"; anything else needs it (otherwise it is a PC app)
         val open = Regex("(?i)^(?:please\\s+)?(?:open|launch|start)\\s+(.+)$").find(l)?.groupValues?.get(1)
             ?: Regex("(?i)^(.+?)\\s+(?:खोलो|खोल दो|खोल|चालू कर|kholo|khol do|khol|open kar|open karo|chalu kar|chalu karo)(?=\\s|$)").find(l)?.groupValues?.get(1)
         if (open != null) {
             val name = open.replace(Regex("(?i)\\b(on|in|my|the|phone|mobile|app)\\b|पर|में|मेरे|फोन|मोबाइल"), " ").trim()
             val app = findApp(ctx, name)
+            val extra = if (app != null) name.lowercase().replace(app.second.lowercase(), " ").trim() else ""
+            if (app != null && extra.length >= 3 && (ACT_AFTER_APP.containsMatchIn(extra) || Regex("(?i)^(and|then|aur|फिर|और)\b").containsMatchIn(extra))) return AGENT
             if (app != null && (phone || PHONE_FIRST.any { app.second.lowercase().contains(it) })) {
                 val i = ctx.packageManager.getLaunchIntentForPackage(app.first)
                 if (i != null && launch(ctx, i)) return "Opening ${app.second}."

@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="hukum_access_desc">Lets Hukum tap WhatsApp\'s Send button, only right after Hukum opens a chat with the message you asked it to send.</string>
+    <string name="hukum_access_desc">Lets Hukum use apps for you when you give it a task (open an app, search, install, send a WhatsApp message). It reads the screen and taps only while a task is running, and never enters passwords or makes payments.</string>
 </resources>

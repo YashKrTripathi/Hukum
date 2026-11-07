@@ -136,6 +136,15 @@ class ConvVM(app: Application) : AndroidViewModel(app) {
         status = "thinking…"
         // Phone-side requests (call, flashlight, alarm, volume, apps ...) are done right here, not on the PC.
         val local = try { PhoneActions.handle(getApplication(), text) } catch (e: Exception) { "Phone action failed: ${e.message}" }
+        if (local == PhoneActions.AGENT) {
+            val app = getApplication<Application>()
+            val answer = if (!HukumAccess.enabled(app)) "To use apps for you, turn on Hukum in Accessibility: More > Voice & wake word > Open Accessibility settings."
+            else try { status = "working…"; PhoneAgent.run(app, api, text) { status = "working: $it" } }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { "I could not finish that: ${e.message}" }
+            messages.add(Msg(false, answer)); status = "speaking… (tap to interrupt)"
+            val sj1 = viewModelScope.launch { voice.speak(answer) }
+            speakJob = sj1; sj1.join(); return
+        }
         if (local != null) {
             messages.add(Msg(false, local))
             status = "speaking… (tap to interrupt)"

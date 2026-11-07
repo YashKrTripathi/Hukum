@@ -39,6 +39,16 @@ class Api(private val ctx: Context) {
         }
     }
 
+    /** Phone agent: ask the gateway's AI for the next action given the goal and the current screen. */
+    fun phoneStep(goal: String, screen: String, history: List<String>): JSONObject {
+        val body = JSONObject().put("goal", goal).put("screen", screen).put("history", org.json.JSONArray(history)).toString().toRequestBody(json)
+        http.newCall(req("/api/phone_step").post(body).build()).execute().use { r ->
+            val s = r.body?.string() ?: ""
+            if (!r.isSuccessful) fail(r.code, s)
+            return JSONObject(s)
+        }
+    }
+
     fun tts(text: String): ByteArray {
         val body = JSONObject().put("text", text).toString().toRequestBody(json)
         http.newCall(req("/api/tts").post(body).build()).execute().use { r ->

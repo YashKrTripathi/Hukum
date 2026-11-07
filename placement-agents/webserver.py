@@ -140,7 +140,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": ok})
             except Exception as e:
                 return self._json(500, {"error": str(e)[:200]})
-        if self.path not in ("/api/chat", "/api/tts", "/api/phone_state", "/api/tool", "/api/inbox", "/api/notify", "/api/desktop"):
+        if self.path not in ("/api/chat", "/api/tts", "/api/phone_state", "/api/tool", "/api/inbox", "/api/notify", "/api/desktop", "/api/phone_step"):
             return self._json(404, {})
         if not self._authed():
             return self._json(401, {"error": "unauthorized"})
@@ -154,6 +154,10 @@ class H(BaseHTTPRequestHandler):
                 for act in chat_agent._tl.actions:
                     push_event("action", json.dumps(act, ensure_ascii=False))
                 return self._json(200, {"result": result})
+            if self.path == "/api/phone_step":              # phone agent: next action for the goal + current screen
+                import phone_agent
+                return self._json(200, phone_agent.step(str(body.get("goal", ""))[:500], str(body.get("screen", ""))[:9000],
+                                                        [str(h) for h in (body.get("history") or [])][-20:]))
             if self.path == "/api/inbox":
                 import inbox
                 for m in (body.get("batch") or [body]):

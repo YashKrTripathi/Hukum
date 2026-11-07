@@ -41,6 +41,7 @@ class WakeWord(private val ctx: Context) {
         var fired = false
         fun check(list: List<String>?) {
             if (fired || list == null) return
+            list.firstOrNull()?.let { lastHeard = it; lastAt = System.currentTimeMillis() }
             for (t in list) {
                 val m = PATTERN.find(t) ?: continue
                 fired = true
@@ -55,6 +56,7 @@ class WakeWord(private val ctx: Context) {
             override fun onPartialResults(b: Bundle?) { check(b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)) }
             override fun onResults(b: Bundle?) { check(b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)); if (!fired) again(250) }
             override fun onError(error: Int) {
+                lastError = "error $error"; lastAt = System.currentTimeMillis()
                 // no speech / no match are normal while idle: just listen again
                 again(when (error) { SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> 6_000L; SpeechRecognizer.ERROR_SPEECH_TIMEOUT, SpeechRecognizer.ERROR_NO_MATCH -> 200L; else -> 2_500L })
             }
@@ -77,6 +79,9 @@ class WakeWord(private val ctx: Context) {
     companion object {
         /** Set by OrbActivity while it owns the microphone. */
         @Volatile var paused = false
+        @Volatile var lastHeard = ""
+        @Volatile var lastError = ""
+        @Volatile var lastAt = 0L
         private val PATTERN = Regex("(?i)\\b(hukum|hukam|hookum|hukm|hukkum|hokum)\\b|हुकुम|हुकम")
         private const val CH = "hukum_wake"
         private const val ID = 7

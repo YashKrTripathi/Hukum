@@ -55,6 +55,15 @@ fun Shell(ringReason: String?, consumeRing: () -> Unit) {
             while (true) { desk.refreshHome(); delay(5000) }
         }
     }
+    // Ask once for what the wake word needs, then (re)start the listener from the foreground.
+    val perms = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()) {
+        if (Prefs.configured(ctx) && Prefs.wake(ctx)) try { HukumService.start(ctx, mic = true) } catch (e: Exception) {}
+    }
+    LaunchedEffect(Unit) {
+        val need = listOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.POST_NOTIFICATIONS)
+            .filter { ctx.checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+        if (need.isNotEmpty() && Prefs.configured(ctx) && Prefs.wake(ctx)) perms.launch(need.toTypedArray())
+    }
     LaunchedEffect(desk.toast) { if (desk.toast != null) { delay(3200); desk.toast = null } }
     LaunchedEffect(ringReason) { if (ringReason != null) voice = true }
 

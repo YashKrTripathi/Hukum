@@ -50,6 +50,13 @@ fun VoicePage() {
             Spacer(Modifier.height(8.dp))
             Row { Chip(if (HukumService.wakeActive) "listening now" else if (on) "armed - open Hukum once to start" else "off", if (HukumService.wakeActive) C.ok else C.mut) }
             if (note.isNotBlank()) Mut(note, Modifier.padding(top = 8.dp))
+            var tick by remember { mutableStateOf(0) }
+            androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); tick++ } }
+            val ago = if (WakeWord.lastAt == 0L) "never" else "${(System.currentTimeMillis() - WakeWord.lastAt) / 1000 + 0 * tick}s ago"
+            Mut("Last heard: " + (WakeWord.lastHeard.ifBlank { "nothing yet" }) + " ($ago)", Modifier.padding(top = 8.dp))
+            if (WakeWord.lastError.isNotBlank()) Mut("Recogniser: " + WakeWord.lastError, Modifier.padding(top = 2.dp))
+            Spacer(Modifier.height(8.dp))
+            Btn("Test the orb now") { WakeWord.trigger(ctx, "") }
         }
         Panel {
             Title("How it works")

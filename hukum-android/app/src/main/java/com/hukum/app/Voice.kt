@@ -79,16 +79,34 @@ class Voice(private val ctx: Context, private val api: Api) {
         }
     }
 
+    private val speakerAttrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
+
+    /** Short pieces: the first (small) one starts playing quickly while the rest are being fetched. */
+    private fun chunk(text: String): List<String> {
+        val parts = text.replace("\n", " ").split(Regex("(?<=[.!?।])\\s+")).filter { it.isNotBlank() }
+        val out = ArrayList<String>(); var cur = ""
+        for (p in parts) {
+            val limit = if (out.isEmpty()) 110 else 200
+            if (cur.isNotEmpty() && cur.length + p.length > limit) { out.add(cur); cur = p } else cur = if (cur.isEmpty()) p else "$cur $p"
+        }
+        if (cur.isNotBlank()) out.add(cur)
+        return out.take(5).ifEmpty { listOf(text) }
+    }
+
     suspend fun speak(text: String) {
         if (text.isBlank()) return
+        val chunks = chunk(text)
+        var played = 0
         if (Prefs.serverVoice(ctx)) {
             try {
-                val bytes = withContext(Dispatchers.IO) { api.tts(text) }
-                playMp3(bytes)
+                kotlinx.coroutines.coroutineScope {
+                    val jobs = chunks.map { c -> kotlinx.coroutines.async(Dispatchers.IO) { api.tts(c) } }
+                    for (j in jobs) { playMp3(j.await()); played++ }
+                }
                 return
-            } catch (e: Exception) { /* fall back to the phone's voice */ }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Exception) { /* fall back to the phone's voice for what is left */ }
         }
-        speakLocal(text)
+        speakLocal(chunks.drop(played).joinToString(" "))
     }
 
     private suspend fun playMp3(bytes: ByteArray) = withContext(Dispatchers.Main) {
@@ -96,9 +114,7 @@ class Voice(private val ctx: Context, private val api: Api) {
         suspendCancellableCoroutine<Unit> { cont ->
             val p = MediaPlayer()
             player = p
-            p.setAudioAttributes(AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            p.setAudioAttributes(speakerAttrs)
             p.setDataSource(f.absolutePath)
             p.setOnCompletionListener { p.release(); if (cont.isActive) cont.resume(Unit) }
             p.setOnErrorListener { _, _, _ -> p.release(); if (cont.isActive) cont.resume(Unit); true }
@@ -110,6 +126,7 @@ class Voice(private val ctx: Context, private val api: Api) {
 
     private suspend fun speakLocal(text: String) = withContext(Dispatchers.Main) {
         val t = tts ?: return@withContext
+        try { t.setAudioAttributes(speakerAttrs) } catch (e: Exception) {}
         if (!ttsReady) return@withContext
         val deva = text.any { it in 'ऀ'..'ॿ' }
         t.language = if (deva) Locale("hi", "IN") else Locale("en", "IN")

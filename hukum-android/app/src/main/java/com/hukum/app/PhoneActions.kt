@@ -21,13 +21,18 @@ object PhoneActions {
     private val PC = Regex("(?i)\\b(pc|laptop|computer|desktop|windows)\\b|कंप्यूटर|लैपटॉप|पीसी")
     private val PHONE = Regex("(?i)\\b(phone|mobile|my phone|this phone)\\b|फोन पर|फोन में|फ़ोन|मोबाइल")
     private val WA = Regex("(?i)whats ?app|व्हाट्सएप|व्हाट्सऐप|वॉट्सऐप|वाट्सएप|व्हाट्स ऐप|व्हाट्स एप|वॉट्सएप")
-    private val FILLER = Regex("(?i)\\b(whats ?app|message|msg|text|send|to|ko|par|pe|on|in|my|phone|mobile|bhejo|bhej|do|kar|karo|kardo|bolo|kaho|please|a|the|call|dial|ki|that|saying)\\b|व्हाट्सएप|व्हाट्सऐप|वॉट्सऐप|वाट्सएप|मैसेज|संदेश|को|पर|पे|में|भेजो|भेज|दो|कर|करो|बोलो|कहो|फोन|फ़ोन|कॉल|लगाओ|मिलाओ|मोबाइल")
+    private val FILLER = Regex("(?i)\\b(whats ?app|open|and|message|msg|text|send|to|ko|par|pe|on|in|my|phone|mobile|bhejo|bhej|do|kar|karo|kardo|bolo|kaho|please|a|the|call|dial|ki|that|saying)\\b|व्हाट्सएप|व्हाट्सऐप|वॉट्सऐप|वाट्सएप|मैसेज|संदेश|को|पर|पे|में|भेजो|भेज|दो|कर|करो|बोलो|कहो|फोन|फ़ोन|कॉल|लगाओ|मिलाओ|मोबाइल")
 
     private fun launch(ctx: Context, i: Intent): Boolean = try { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (e: Exception) { false }
     private fun has(ctx: Context, p: String) = ctx.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
 
+    /** Speech often writes English words in Devanagari ("ओपन एंड सैंड"): turn the common ones back into English first. */
+    private val LOAN = mapOf("ओपन" to "open", "एंड" to "and", "एन्ड" to "and", "सैंड" to "send", "सेंड" to "send", "सेन्ड" to "send", "सैन्ड" to "send",
+        "मैसेज" to "message", "टेक्स्ट" to "text", "हाय" to "hi", "हाई" to "hi", "हैलो" to "hello", "हेलो" to "hello", "व्हाट्सएप" to "whatsapp", "व्हाट्सऐप" to "whatsapp")
+    private fun normalize(s: String): String = s.split(" ").joinToString(" ") { LOAN[it] ?: it }
+
     fun handle(ctx: Context, raw: String): String? {
-        val t = raw.trim()
+        val t = normalize(raw.trim())
         val l = t.lowercase()
         if (l.isBlank() || l.startsWith("__")) return null
         if (PC.containsMatchIn(l)) return null
@@ -92,6 +97,8 @@ object PhoneActions {
 
         // WhatsApp: open the app, or open a chat with the message filled in (and tap Send if Hukum's accessibility is on)
         if (WA.containsMatchIn(l)) return whatsapp(ctx, t)
+        // "send papa hi", "papa ko hi bhejo": sending a message with no app named means WhatsApp (say "sms" for a text message)
+        if (!Regex("(?i)\\bsms\\b|e-?mail|mail").containsMatchIn(l) && Regex("(?i)(?:^|\\s)(?:send|bhejo|bhej do|भेजो|भेज दो)(?:\\s|$)").containsMatchIn(l)) return whatsapp(ctx, t)
 
         // call: "call Rahul", "Rahul ko call karo", "Rahul को फोन लगाओ"
         val callWord = Regex("(?i)\\bcall\\b|\\bdial\\b|कॉल|फोन लगा|फ़ोन लगा|फोन कर|फ़ोन कर|फोन मिला|phone laga|phone kar|phone mila")
@@ -146,13 +153,23 @@ object PhoneActions {
         // split "who ... <separator> body"
         val sep = Regex("(?i)\\s(?:ki|कि|saying|that|ke liye|:)\\s*|\\s(?:कहो|बोलो|kaho|bolo)\\s+|:\\s*").find(l)
         val left = if (sep != null) l.substring(0, sep.range.first) else l
-        val body = if (sep != null) l.substring(sep.range.last + 1).trim() else ""
-        val who = clean(left.replace(Regex("(?i)\\b(open|launch|start|kholo|khol)\\b|खोलो|खोल|चालू"), " "))
+        var body = if (sep != null) l.substring(sep.range.last + 1).trim() else ""
+        var who = clean(left.replace(Regex("(?i)\\b(open|launch|start|kholo|khol)\\b|खोलो|खोल|चालू"), " "))
+        var c: Pair<String, String>? = null
+        // "send papa hi": no separator, so find the longest start of the words that is a contact; the rest is the message
+        if (who.isNotBlank() && body.isBlank() && who.contains(" ")) {
+            val toks = who.split(" ").filter { it.isNotBlank() }
+            for (k in toks.size downTo 1) {
+                val hit = contact(ctx, toks.take(k).joinToString(" ")) ?: continue
+                c = hit; body = toks.drop(k).joinToString(" "); who = toks.take(k).joinToString(" "); break
+            }
+        }
+        body = when (body.lowercase()) { "hai", "है", "hi", "hii", "हैं" -> "Hi"; "hello", "hallo" -> "Hello"; else -> body }
         if (who.isBlank()) {
             val i = ctx.packageManager.getLaunchIntentForPackage(pkg)
             return if (i != null && launch(ctx, i)) "Opening WhatsApp." else "I could not open WhatsApp."
         }
-        val c = contact(ctx, who)
+        if (c == null) c = contact(ctx, who)
         val (name, num) = c ?: run {
             if (!has(ctx, android.Manifest.permission.READ_CONTACTS)) return "Allow Contacts for Hukum (Settings > Apps > Hukum > Permissions), then ask again."
             return "I could not find \"$who\" in your contacts."

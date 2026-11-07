@@ -179,6 +179,8 @@ object PhoneActions {
         if (who.isNotBlank() && body.isBlank() && who.contains(" ")) {
             val toks = who.split(" ").filter { it.isNotBlank() }
             for (k in toks.size downTo 1) {
+                // a word with no consonant sound ("hi", "ok") is never part of a name: it starts the message
+                if (toks.take(k).any { skeleton(it).isEmpty() }) continue
                 val hit = contact(ctx, toks.take(k).joinToString(" ")) ?: continue
                 c = hit; body = toks.drop(k).joinToString(" "); who = toks.take(k).joinToString(" "); break
             }
@@ -201,7 +203,7 @@ object PhoneActions {
         val ok = launch(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(pkg))
         return when {
             !ok -> "I could not open WhatsApp."
-            body.isBlank() -> "Opened WhatsApp chat with $name."
+            body.isBlank() -> "Opened WhatsApp chat with $name. What should I send? Say: WhatsApp $name ki, then your message."
             HukumAccess.enabled(ctx) -> "Sending to $name. If the phone or WhatsApp asks for your fingerprint or PIN, unlock it and I will finish sending."
             else -> "Chat with $name is open. I copied your message: paste it and send, or turn on Hukum accessibility in More > Voice so I can type and send it."
         }

@@ -13,12 +13,15 @@ import android.provider.MediaStore
 import android.provider.Settings
 
 /**
- * Things Boss asks for that belong to THIS phone (call, flashlight, alarm, volume, apps ...). They are done locally and
- * never sent to the PC. Anything that mentions the PC, or that is not recognised, returns null and goes to the PC as before.
+ * Things Boss asks for that belong to THIS phone (call, WhatsApp, flashlight, alarm, volume, apps ...). They are done
+ * locally and never sent to the PC. Anything that mentions the PC, or that is not recognised, returns null and goes to
+ * the PC as before. Understands English, Hinglish and Hindi word order ("Rahul ko call karo", "WhatsApp kholo").
  */
 object PhoneActions {
     private val PC = Regex("(?i)\\b(pc|laptop|computer|desktop|windows)\\b|कंप्यूटर|लैपटॉप|पीसी")
     private val PHONE = Regex("(?i)\\b(phone|mobile|my phone|this phone)\\b|फोन पर|फोन में|फ़ोन|मोबाइल")
+    private val WA = Regex("(?i)whats ?app|व्हाट्सएप|व्हाट्सऐप|वॉट्सऐप|वाट्सएप|व्हाट्स ऐप|व्हाट्स एप|वॉट्सएप")
+    private val FILLER = Regex("(?i)\\b(whats ?app|message|msg|text|send|to|ko|par|pe|on|in|my|phone|mobile|bhejo|bhej|do|kar|karo|kardo|bolo|kaho|please|a|the|call|dial|ki|that|saying)\\b|व्हाट्सएप|व्हाट्सऐप|वॉट्सऐप|वाट्सएप|मैसेज|संदेश|को|पर|पे|में|भेजो|भेज|दो|कर|करो|बोलो|कहो|फोन|फ़ोन|कॉल|लगाओ|मिलाओ|मोबाइल")
 
     private fun launch(ctx: Context, i: Intent): Boolean = try { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (e: Exception) { false }
     private fun has(ctx: Context, p: String) = ctx.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
@@ -35,8 +38,7 @@ object PhoneActions {
             val off = Regex("\\boff\\b|बंद|band|turn off").containsMatchIn(l)
             return try {
                 val cm = ctx.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-                val id = cm.cameraIdList.first()
-                cm.setTorchMode(id, !off); if (off) "Flashlight off." else "Flashlight on."
+                cm.setTorchMode(cm.cameraIdList.first(), !off); if (off) "Flashlight off." else "Flashlight on."
             } catch (e: Exception) { "I could not use the flashlight: ${e.message}" }
         }
         // battery
@@ -87,31 +89,39 @@ object PhoneActions {
             val q = m.groupValues[1].trim()
             if (q.isNotBlank()) return if (launch(ctx, Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + Uri.encode(q))))) "Navigating to $q." else "I could not open maps."
         }
-        // call
-        Regex("(?:\\bcall\\b|\\bphone\\b to|dial|कॉल|फोन लगा|फ़ोन लगा)\\s*(?:to\\s+)?(.+)").find(l)?.let { m ->
-            var who = m.groupValues[1].trim().removeSuffix("please").removeSuffix("kar do").removeSuffix("करो").removeSuffix("लगाओ").trim()
-            if (who.isNotBlank() && !Regex("my phone|the pc").containsMatchIn(who)) return call(ctx, who)
+
+        // WhatsApp: open the app, or open a chat with the message filled in (and tap Send if Hukum's accessibility is on)
+        if (WA.containsMatchIn(l)) return whatsapp(ctx, t)
+
+        // call: "call Rahul", "Rahul ko call karo", "Rahul को फोन लगाओ"
+        val callWord = Regex("(?i)\\bcall\\b|\\bdial\\b|कॉल|फोन लगा|फ़ोन लगा|फोन कर|फ़ोन कर|फोन मिला|phone laga|phone kar|phone mila")
+        if (callWord.containsMatchIn(l) && !Regex("missed|मिस्ड|history|log").containsMatchIn(l)) {
+            val who = clean(Regex("(?i)^(.+?)\\s+(?:को|ko)(?=\\s|$)").find(l)?.groupValues?.get(1) ?: l.replace(callWord, " "))
+            if (who.isNotBlank()) return call(ctx, who)
         }
         // sms: opens the composer with the text filled in (never sends by itself)
         Regex("(?:\\bsms\\b|\\bmessage\\b|\\btext\\b|मैसेज)\\s*(?:to\\s+)?(.+?)\\s*(?:saying|that|:|कि|कहो)\\s*(.+)").find(l)?.let { m ->
-            val who = m.groupValues[1].trim(); val body = m.groupValues[2].trim()
-            if (!Regex("whatsapp|व्हाट्सएप").containsMatchIn(l)) {
-                val num = number(ctx, who) ?: return "I could not find $who in your contacts."
-                return if (launch(ctx, Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$num")).putExtra("sms_body", body))) "Message to $who is ready: tap send." else "I could not open messages."
-            }
+            val who = clean(m.groupValues[1]); val body = m.groupValues[2].trim()
+            val c = contact(ctx, who) ?: return "I could not find $who in your contacts."
+            return if (launch(ctx, Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:${c.second}")).putExtra("sms_body", body))) "Message to ${c.first} is ready: tap send." else "I could not open messages."
         }
-        // the rest only when Boss says "phone"
-        if (phone) {
-            Regex("(?:open|launch|start|खोलो|खोल|चालू)\\s+(.+?)(?:\\s+(?:on|in|पर|में).*)?$").find(l)?.let { m ->
-                val name = m.groupValues[1].replace(Regex("(my )?(phone|mobile)"), "").trim()
-                val pkg = findApp(ctx, name)
-                if (pkg != null) { val i = ctx.packageManager.getLaunchIntentForPackage(pkg.first); if (i != null && launch(ctx, i)) return "Opening ${pkg.second} on your phone." }
-                return "I could not find an app called $name on your phone."
+
+        // opening an app: phone-first apps need no "phone"; anything else needs it (otherwise it is a PC app)
+        val open = Regex("(?i)^(?:please\\s+)?(?:open|launch|start)\\s+(.+)$").find(l)?.groupValues?.get(1)
+            ?: Regex("(?i)^(.+?)\\s+(?:खोलो|खोल दो|खोल|चालू कर|kholo|khol do|khol|open kar|open karo|chalu kar|chalu karo)(?=\\s|$)").find(l)?.groupValues?.get(1)
+        if (open != null) {
+            val name = open.replace(Regex("(?i)\\b(on|in|my|the|phone|mobile|app)\\b|पर|में|मेरे|फोन|मोबाइल"), " ").trim()
+            val app = findApp(ctx, name)
+            if (app != null && (phone || PHONE_FIRST.any { app.second.lowercase().contains(it) })) {
+                val i = ctx.packageManager.getLaunchIntentForPackage(app.first)
+                if (i != null && launch(ctx, i)) return "Opening ${app.second}."
             }
+            if (phone) return "I could not find an app called $name on your phone."
+        }
+        if (phone) {
             Regex("(?:play|चलाओ|बजाओ)\\s+(.+?)(?:\\s+(?:on|in|पर|में).*)?$").find(l)?.let { m ->
                 val q = m.groupValues[1].replace(Regex("(my )?(phone|mobile)"), "").trim()
-                val i = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).putExtra(android.app.SearchManager.QUERY, q)
-                return if (launch(ctx, i)) "Playing $q." else "I could not start playback."
+                return if (launch(ctx, Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).putExtra(android.app.SearchManager.QUERY, q))) "Playing $q." else "I could not start playback."
             }
             Regex("(?:search|google|सर्च)\\s+(?:for\\s+)?(.+?)(?:\\s+(?:on|in|पर|में).*)?$").find(l)?.let { m ->
                 val q = m.groupValues[1].replace(Regex("(my )?(phone|mobile)"), "").trim()
@@ -121,33 +131,120 @@ object PhoneActions {
         return null
     }
 
+    private val PHONE_FIRST = listOf("whatsapp", "instagram", "snapchat", "telegram", "phonepe", "paytm", "google pay", "gpay", "camera", "gallery", "photos",
+        "contacts", "messages", "phone", "dialer", "settings", "maps", "play store", "clock", "calculator", "truecaller", "facebook", "messenger", "youtube", "spotify")
+
+    private fun clean(s: String) = s.replace(FILLER, " ").replace(Regex("[,.!?]"), " ").replace(Regex("\\s+"), " ").trim()
+
+    // ---------------------------------------------------------------- WhatsApp
+    private fun waPackage(ctx: Context): String? =
+        listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull { try { ctx.packageManager.getPackageInfo(it, 0); true } catch (e: Exception) { false } }
+
+    private fun whatsapp(ctx: Context, raw: String): String {
+        val pkg = waPackage(ctx) ?: return "WhatsApp is not installed on this phone."
+        val l = raw.trim()
+        // split "who ... <separator> body"
+        val sep = Regex("(?i)\\s(?:ki|कि|saying|that|ke liye|:)\\s*|\\s(?:कहो|बोलो|kaho|bolo)\\s+|:\\s*").find(l)
+        val left = if (sep != null) l.substring(0, sep.range.first) else l
+        val body = if (sep != null) l.substring(sep.range.last + 1).trim() else ""
+        val who = clean(left.replace(Regex("(?i)\\b(open|launch|start|kholo|khol)\\b|खोलो|खोल|चालू"), " "))
+        if (who.isBlank()) {
+            val i = ctx.packageManager.getLaunchIntentForPackage(pkg)
+            return if (i != null && launch(ctx, i)) "Opening WhatsApp." else "I could not open WhatsApp."
+        }
+        val c = contact(ctx, who)
+        val (name, num) = c ?: run {
+            if (!has(ctx, android.Manifest.permission.READ_CONTACTS)) return "Allow Contacts for Hukum (Settings > Apps > Hukum > Permissions), then ask again."
+            return "I could not find \"$who\" in your contacts."
+        }
+        val url = "https://wa.me/${waNumber(num)}" + if (body.isNotBlank()) "?text=" + Uri.encode(body) else ""
+        if (body.isNotBlank() && HukumAccess.enabled(ctx)) HukumAccess.expectSend()
+        val ok = launch(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(pkg))
+        return when {
+            !ok -> "I could not open WhatsApp."
+            body.isBlank() -> "Opened WhatsApp chat with $name."
+            HukumAccess.enabled(ctx) -> "Sending to $name: $body"
+            else -> "Chat with $name is open with your message. Tap send, or turn on Hukum accessibility in More > Voice so I can send it."
+        }
+    }
+
+    private fun waNumber(n: String): String {
+        val d = n.filter { it.isDigit() }
+        return when {
+            n.trim().startsWith("+") -> d
+            d.length == 10 -> "91$d"
+            d.length == 11 && d.startsWith("0") -> "91" + d.substring(1)
+            else -> d
+        }
+    }
+
+    // ---------------------------------------------------------------- contacts (matches Devanagari speech to Latin contact names)
+    private val DEV = mapOf(
+        'अ' to "a", 'आ' to "a", 'इ' to "i", 'ई' to "i", 'उ' to "u", 'ऊ' to "u", 'ऋ' to "ri", 'ए' to "e", 'ऐ' to "ai", 'ओ' to "o", 'औ' to "au",
+        'ा' to "a", 'ि' to "i", 'ी' to "i", 'ु' to "u", 'ू' to "u", 'ृ' to "ri", 'े' to "e", 'ै' to "ai", 'ो' to "o", 'ौ' to "au", 'ॉ' to "o", 'ॅ' to "e",
+        'क' to "k", 'ख' to "kh", 'ग' to "g", 'घ' to "gh", 'ङ' to "n", 'च' to "ch", 'छ' to "ch", 'ज' to "j", 'झ' to "jh", 'ञ' to "n",
+        'ट' to "t", 'ठ' to "th", 'ड' to "d", 'ढ' to "dh", 'ण' to "n", 'त' to "t", 'थ' to "th", 'द' to "d", 'ध' to "dh", 'न' to "n",
+        'प' to "p", 'फ' to "f", 'ब' to "b", 'भ' to "bh", 'म' to "m", 'य' to "y", 'र' to "r", 'ल' to "l", 'व' to "v", 'श' to "sh", 'ष' to "sh", 'स' to "s", 'ह' to "h",
+        'ं' to "n", 'ँ' to "n", 'ः' to "h", '्' to "", '़' to "")
+
+    /** Rough sound-alike key: Devanagari or Latin text -> consonant skeleton, so "ऋषि" and "Rishi" both give "rs". */
+    private fun skeleton(word: String): String {
+        val sb = StringBuilder()
+        for (ch in word.lowercase()) sb.append(DEV[ch] ?: if (ch in 'a'..'z') ch.toString() else "")
+        var t = sb.toString()
+        for ((a, b) in listOf("sh" to "s", "ch" to "c", "ph" to "f", "kh" to "k", "gh" to "g", "th" to "t", "dh" to "d", "bh" to "b", "jh" to "j", "z" to "j", "q" to "k", "x" to "ks", "w" to "v"))
+            t = t.replace(a, b)
+        t = t.replace(Regex("[aeiouyhv]"), "")
+        return t.replace(Regex("(.)\\1+"), "$1")
+    }
+
+    private fun contact(ctx: Context, who: String): Pair<String, String>? {
+        val digits = who.filter { it.isDigit() || it == '+' }
+        if (digits.length >= 6 && digits.length >= who.replace(" ", "").length - 2) return who to digits
+        if (!has(ctx, android.Manifest.permission.READ_CONTACTS)) return null
+        val q = who.split(" ").map { skeleton(it) }.filter { it.isNotEmpty() }
+        val rows = ArrayList<Pair<String, String>>()
+        ctx.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)?.use { c ->
+            while (c.moveToNext()) rows.add((c.getString(0) ?: "") to (c.getString(1) ?: ""))
+        }
+        // 1. plain text match
+        rows.firstOrNull { it.first.equals(who, true) }?.let { return it }
+        // 2. every spoken word matches a word of the contact name by sound
+        var best: Pair<String, String>? = null; var bestScore = -1
+        for (r in rows) {
+            val ns = r.first.split(" ", "-", "_").map { skeleton(it) }.filter { it.isNotEmpty() }
+            if (q.isEmpty() || ns.isEmpty()) continue
+            val hit = q.count { w -> ns.any { it == w || (w.length >= 2 && it.startsWith(w)) || (it.length >= 2 && w.startsWith(it)) } }
+            if (hit < q.size) continue
+            val score = hit * 10 - (ns.size - q.size)
+            if (score > bestScore) { best = r; bestScore = score }
+        }
+        best?.let { return it }
+        // 3. contains
+        return rows.firstOrNull { it.first.contains(who, true) }
+    }
+
+    private fun call(ctx: Context, who: String): String {
+        val c = contact(ctx, who)
+        if (c == null) {
+            launch(ctx, Intent(Intent.ACTION_DIAL))
+            return if (has(ctx, android.Manifest.permission.READ_CONTACTS)) "I could not find $who in your contacts." else "Allow Contacts for Hukum (Settings > Apps > Hukum > Permissions) so I can call $who. I opened the dialer."
+        }
+        val uri = Uri.parse("tel:" + Uri.encode(c.second))
+        return if (has(ctx, android.Manifest.permission.CALL_PHONE) && launch(ctx, Intent(Intent.ACTION_CALL, uri))) "Calling ${c.first}."
+        else if (launch(ctx, Intent(Intent.ACTION_DIAL, uri))) "Dialling ${c.first}: tap the call button (allow Phone permission for Hukum to call directly)." else "I could not start the call."
+    }
+
     private fun findApp(ctx: Context, name: String): Pair<String, String>? {
         val n = name.lowercase().trim()
         if (n.isBlank()) return null
         val pm = ctx.packageManager
         val apps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
             .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
-        return apps.firstOrNull { it.second.lowercase() == n } ?: apps.firstOrNull { it.second.lowercase().contains(n) } ?: apps.firstOrNull { n.contains(it.second.lowercase()) && it.second.length > 2 }
-    }
-
-    private fun number(ctx: Context, who: String): String? {
-        val digits = who.filter { it.isDigit() || it == '+' }
-        if (digits.length >= 6 && digits.length >= who.replace(" ", "").length - 2) return digits
-        if (!has(ctx, android.Manifest.permission.READ_CONTACTS)) return null
-        ctx.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
-            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " LIKE ?", arrayOf("%$who%"), null)?.use { c -> if (c.moveToFirst()) return c.getString(0) }
-        return null
-    }
-
-    private fun call(ctx: Context, who: String): String {
-        val num = number(ctx, who)
-        if (num == null) {
-            // no permission or no match: let the phone's own contact search/dialer handle it
-            launch(ctx, Intent(Intent.ACTION_DIAL))
-            return if (has(ctx, android.Manifest.permission.READ_CONTACTS)) "I could not find $who in your contacts." else "Allow contacts for Hukum (More > Voice) so I can call $who. I opened the dialer."
-        }
-        val uri = Uri.parse("tel:" + Uri.encode(num))
-        return if (has(ctx, android.Manifest.permission.CALL_PHONE) && launch(ctx, Intent(Intent.ACTION_CALL, uri))) "Calling $who."
-        else if (launch(ctx, Intent(Intent.ACTION_DIAL, uri))) "Dialling $who: tap call." else "I could not start the call."
+        val sk = skeleton(n)
+        return apps.firstOrNull { it.second.lowercase() == n } ?: apps.firstOrNull { it.second.lowercase().contains(n) }
+            ?: apps.firstOrNull { n.contains(it.second.lowercase()) && it.second.length > 2 }
+            ?: apps.firstOrNull { sk.length >= 2 && skeleton(it.second) == sk }
     }
 }

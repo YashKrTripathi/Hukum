@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hukum_access_desc">Lets Hukum tap WhatsApp\'s Send button, only right after Hukum opens a chat with the message you asked it to send.</string>
+</resources>

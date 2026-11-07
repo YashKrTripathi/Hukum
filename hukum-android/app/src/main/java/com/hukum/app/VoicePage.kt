@@ -76,6 +76,13 @@ fun VoicePage() {
             Mut("• Needs: microphone, notifications, full-screen notifications, battery set to Unrestricted.")
         }
         Panel {
+            Title("Send WhatsApp messages by voice")
+            Row { Chip(if (HukumAccess.enabled(ctx)) "send button: allowed" else "send button: off", if (HukumAccess.enabled(ctx)) C.ok else C.warn) }
+            Mut("Say: WhatsApp Rahul ki aaj nahi aa paunga. Hukum opens the chat with that text. To also tap Send for you, turn on Hukum WhatsApp sender in Accessibility (it only acts right after Hukum opens a chat).", Modifier.padding(top = 6.dp))
+            Spacer(Modifier.height(6.dp))
+            Btn("Open Accessibility settings") { open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        }
+        Panel {
             Title("Allow these on the phone")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Btn("Battery") { open(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.packageName))) }

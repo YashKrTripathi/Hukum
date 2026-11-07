@@ -11,6 +11,7 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -100,7 +101,7 @@ class Voice(private val ctx: Context, private val api: Api) {
         if (Prefs.serverVoice(ctx)) {
             try {
                 kotlinx.coroutines.coroutineScope {
-                    val jobs = chunks.map { c -> kotlinx.coroutines.async(Dispatchers.IO) { api.tts(c) } }
+                    val jobs = chunks.map { c -> async(Dispatchers.IO) { api.tts(c) } }
                     for (j in jobs) { playMp3(j.await()); played++ }
                 }
                 return

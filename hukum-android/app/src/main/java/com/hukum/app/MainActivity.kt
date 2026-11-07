@@ -84,15 +84,19 @@ class ConvVM(app: Application) : AndroidViewModel(app) {
     fun start(first: String? = null, showFirst: Boolean = false) {
         if (job?.isActive == true) return
         active = true
+        // One question, one answer, then stop. Only Hukum's own openings (ring / open) carry on as a conversation.
+        val oneShot = first?.startsWith("__") != true
         job = viewModelScope.launch {
             try {
                 if (first != null) turn(first, show = showFirst)
-                while (active) {
+                var silent = 0
+                while (active && !(oneShot && first != null)) {
                     status = "listening…"
                     val heard = voice.listen(lang) { status = "🎙 $it" }
                     if (voice.lastError != null) { messages.add(Msg(false, "⚠️ ${voice.lastError}")); break }
-                    if (heard.isNullOrBlank()) continue
+                    if (heard.isNullOrBlank()) { if (++silent >= (if (oneShot) 2 else 4)) break else continue }
                     turn(heard, show = true)
+                    if (oneShot) break
                 }
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) messages.add(Msg(false, "⚠️ ${e.message}"))

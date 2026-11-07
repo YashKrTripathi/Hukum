@@ -84,7 +84,7 @@ class WakeWord(private val ctx: Context) {
         @Volatile var lastError = ""
         @Volatile var state = "not started"
         @Volatile var lastAt = 0L
-        private val PATTERN = Regex("(?i)\\b(hukum|hukam|hookum|hukm|hukkum|hokum)\\b|हुकुम|हुकम")
+        private val PATTERN = Regex("(?i)\\b(hukum|hukam|hookum|hukm|hukkum|hokum)\\b|हुकुम|हुकम|हुक्म|हुकूम|हकम|हुकुं|होकम")
         private const val CH = "hukum_wake"
         private const val ID = 7
 

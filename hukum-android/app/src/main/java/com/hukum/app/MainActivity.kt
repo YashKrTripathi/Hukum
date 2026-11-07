@@ -202,7 +202,8 @@ class MainActivity : ComponentActivity() {
             try { getSharedPreferences("hukum", MODE_PRIVATE).edit().putString("crash", e.stackTraceToString().take(900)).commit() } catch (x: Exception) {}
             old?.uncaughtException(t, e)
         }
-        if (Prefs.configured(this)) try { HukumService.start(this, mic = true) } catch (e: Exception) {}
+        Prefs.migrateWakeOff(this)
+        if (Prefs.configured(this)) try { HukumService.start(this, mic = Prefs.wake(this)) } catch (e: Exception) {}
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = C.accent, background = C.bg, surface = C.panel, onSurface = C.tx,
                 onBackground = C.tx, secondary = C.accent2, outline = C.line, surfaceVariant = C.card, onSurfaceVariant = C.mut)) {

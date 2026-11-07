@@ -11,13 +11,17 @@ object Prefs {
     fun lang(c: Context): String = sp(c).getString("lang", "hi-IN") ?: "hi-IN"
     fun serverVoice(c: Context): Boolean = sp(c).getBoolean("server_voice", true)
 
-    fun wake(c: Context): Boolean = sp(c).getBoolean("wake", true)
+    fun wake(c: Context): Boolean = sp(c).getBoolean("wake", false)
     /** Listen for the wake word only while the phone is locked / screen off (less ambient listening). */
     fun wakeLockedOnly(c: Context): Boolean = sp(c).getBoolean("wake_locked_only", false)
     fun setWakeLockedOnly(c: Context, on: Boolean) = sp(c).edit().putBoolean("wake_locked_only", on).apply()
     /** Walkie-talkie mode: keep listening until Boss says "over". */
     fun overMode(c: Context): Boolean = sp(c).getBoolean("over_mode", true)
     fun setOverMode(c: Context, on: Boolean) = sp(c).edit().putBoolean("over_mode", on).apply()
+    /** One-time: earlier builds had the always-on mic on by default. Boss chose "mic off until I ask", so switch it off once. */
+    fun migrateWakeOff(c: Context) {
+        if (!sp(c).getBoolean("wake_off_v1", false)) sp(c).edit().putBoolean("wake", false).putBoolean("wake_off_v1", true).apply()
+    }
     fun setWake(c: Context, on: Boolean) = sp(c).edit().putBoolean("wake", on).apply()
     fun history(c: Context): List<String> = (sp(c).getString("history", "") ?: "").split("\n").filter { it.isNotBlank() }
     fun setHistory(c: Context, items: List<String>) = sp(c).edit().putString("history", items.take(20).joinToString("\n")).apply()

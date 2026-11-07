@@ -46,6 +46,9 @@ class Voice(private val ctx: Context, private val api: Api) {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+                // tell the recogniser which names to expect, so "Rishi" is not heard as "Harsh" (Android 13+)
+                try { putStringArrayListExtra("android.speech.extra.BIASING_STRINGS", PhoneActions.contactNames(ctx)) } catch (e: Exception) {}
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1600L)
             }
             var done = false
@@ -57,7 +60,7 @@ class Voice(private val ctx: Context, private val api: Api) {
             }
             r.setRecognitionListener(object : RecognitionListener {
                 override fun onResults(results: Bundle?) {
-                    finish(results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull())
+                    finish(results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.let { PhoneActions.pickBest(ctx, it) })
                 }
                 override fun onPartialResults(partial: Bundle?) {
                     partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let {

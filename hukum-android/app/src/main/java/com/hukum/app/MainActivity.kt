@@ -84,6 +84,7 @@ class ConvVM(app: Application) : AndroidViewModel(app) {
     fun start(first: String? = null, showFirst: Boolean = false) {
         if (job?.isActive == true) return
         active = true
+        viewModelScope.launch(Dispatchers.IO) { try { PhoneActions.contactNames(getApplication()) } catch (e: Exception) {} }   // warm the contact cache off the main thread
         // One question, one answer, then stop. Only Hukum's own openings (ring / open) carry on as a conversation.
         val oneShot = first?.startsWith("__") != true
         job = viewModelScope.launch {

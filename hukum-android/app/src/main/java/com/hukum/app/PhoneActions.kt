@@ -190,7 +190,7 @@ object PhoneActions {
             val i = ctx.packageManager.getLaunchIntentForPackage(pkg)
             return if (i != null && launch(ctx, i)) "Opening WhatsApp." else "I could not open WhatsApp."
         }
-        if (c == null) c = contact(ctx, who)
+        if (c == null) { val m = contactMatches(ctx, who); ambiguous(m)?.let { return it }; c = m.firstOrNull() }
         val (name, num) = c ?: run {
             if (!has(ctx, android.Manifest.permission.READ_CONTACTS)) return "Allow Contacts for Hukum (Settings > Apps > Hukum > Permissions), then ask again."
             return "I could not find \"$who\" in your contacts."
@@ -239,35 +239,94 @@ object PhoneActions {
         return t.replace(Regex("(.)\\1+"), "$1")
     }
 
-    private fun contact(ctx: Context, who: String): Pair<String, String>? {
+    /** Words people save family contacts under: "mummy", "mom", "मम्मी", "माँ" are the same person. */
+    private val NICK = listOf(
+        listOf("mummy", "mommy", "mom", "mama", "maa", "mother", "mata", "मम्मी", "मॉम", "मां", "माँ", "माता", "मम्मा"),
+        listOf("papa", "pappa", "dad", "daddy", "father", "pita", "pitaji", "पापा", "डैड", "पिता", "पिताजी", "पप्पा"),
+        listOf("bhai", "bhaiya", "brother", "bro", "भाई", "भैया"),
+        listOf("didi", "behen", "bahen", "sister", "sis", "दीदी", "बहन"),
+        listOf("dadi", "grandma", "दादी"), listOf("dada", "grandpa", "दादा"), listOf("nani", "नानी"), listOf("nana", "नाना"),
+        listOf("wife", "biwi", "patni", "पत्नी", "बीवी"), listOf("husband", "pati", "पति"))
+
+    private fun nickGroup(word: String): List<String> = NICK.firstOrNull { g -> g.any { it.equals(word, true) } } ?: listOf(word)
+
+    private class Row(val name: String, val number: String)
+    @Volatile private var rowsCache: Pair<Long, List<Row>>? = null
+
+    private fun contactRows(ctx: Context): List<Row> {
+        val now = System.currentTimeMillis()
+        rowsCache?.let { if (now - it.first < 120_000) return it.second }
+        val out = ArrayList<Row>()
+        if (has(ctx, android.Manifest.permission.READ_CONTACTS)) {
+            try {
+                ctx.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                    arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)?.use { c ->
+                    while (c.moveToNext()) out.add(Row(c.getString(0) ?: "", c.getString(1) ?: ""))
+                }
+            } catch (e: Exception) { /* no contacts: callers say so */ }
+        }
+        rowsCache = now to out
+        return out
+    }
+
+    /** Names handed to the speech recogniser so it listens for them (stops "Rishi" being heard as "Harsh"). Cached; call off the main thread first. */
+    fun contactNames(ctx: Context): ArrayList<String> {
+        val names = LinkedHashSet<String>()
+        contactRows(ctx).forEach { if (it.name.isNotBlank()) names.add(it.name) }
+        return ArrayList(names.take(200))
+    }
+
+    /** Of the recogniser's alternative transcripts, pick the one that mentions a real contact (or a family word). */
+    fun pickBest(ctx: Context, alts: List<String>): String {
+        if (alts.size < 2) return alts.firstOrNull().orEmpty()
+        val rows = contactRows(ctx)
+        val known = HashSet<String>()
+        rows.forEach { r -> r.name.lowercase().split(" ", "-", "_").filter { it.isNotBlank() }.forEach { known.add(it) } }
+        NICK.flatten().forEach { known.add(it.lowercase()) }
+        fun score(t: String) = t.lowercase().split(" ").count { it in known }
+        var best = alts[0]; var bs = score(best)
+        for (a in alts.drop(1)) { val sc = score(a); if (sc > bs) { best = a; bs = sc } }
+        return best
+    }
+
+    /** Contacts that match what was said, best first. More than one different name means the request is ambiguous. */
+    private fun contactMatches(ctx: Context, who: String): List<Pair<String, String>> {
         val digits = who.filter { it.isDigit() || it == '+' }
-        if (digits.length >= 6 && digits.length >= who.replace(" ", "").length - 2) return who to digits
-        if (!has(ctx, android.Manifest.permission.READ_CONTACTS)) return null
-        val q = who.split(" ").map { skeleton(it) }.filter { it.isNotEmpty() }
-        val rows = ArrayList<Pair<String, String>>()
-        ctx.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-            arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER), null, null, null)?.use { c ->
-            while (c.moveToNext()) rows.add((c.getString(0) ?: "") to (c.getString(1) ?: ""))
-        }
-        // 1. plain text match
-        rows.firstOrNull { it.first.equals(who, true) }?.let { return it }
-        // 2. every spoken word matches a word of the contact name by sound
-        var best: Pair<String, String>? = null; var bestScore = -1
+        if (digits.length >= 6 && digits.length >= who.replace(" ", "").length - 2) return listOf(who to digits)
+        val rows = contactRows(ctx)
+        if (rows.isEmpty()) return emptyList()
+        rows.filter { it.name.equals(who, true) }.let { ex -> if (ex.isNotEmpty()) return ex.map { it.name to it.number } }
+        val words = who.split(" ").filter { it.isNotBlank() }
+        // each spoken word -> the sound-keys of its nickname family
+        val q = words.map { w -> nickGroup(w).map { skeleton(it) }.filter { it.isNotEmpty() }.toSet() }.filter { it.isNotEmpty() }
+        var best = -1; val scored = ArrayList<Pair<Row, Int>>()
         for (r in rows) {
-            val ns = r.first.split(" ", "-", "_").map { skeleton(it) }.filter { it.isNotEmpty() }
+            val raw = r.name.lowercase().split(" ", "-", "_").filter { it.isNotBlank() }
+            val ns = raw.map { skeleton(it) }.filter { it.isNotEmpty() }
             if (q.isEmpty() || ns.isEmpty()) continue
-            val hit = q.count { w -> ns.any { it == w || (w.length >= 2 && it.startsWith(w)) || (it.length >= 2 && w.startsWith(it)) } }
+            val hit = q.count { grp -> ns.any { n -> grp.any { w -> n == w || (w.length >= 2 && n.startsWith(w)) || (n.length >= 2 && w.startsWith(n)) } } }
             if (hit < q.size) continue
-            val score = hit * 10 - (ns.size - q.size)
-            if (score > bestScore) { best = r; bestScore = score }
+            // exact spelling of the word (or one of its nicknames) in the contact name is a much stronger match than sounding alike
+            val exact = words.count { w -> nickGroup(w).any { g -> raw.contains(g.lowercase()) } }
+            val score = hit * 10 + exact * 5 - (ns.size - q.size)
+            scored.add(r to score); if (score > best) best = score
         }
-        best?.let { return it }
-        // 3. contains
-        return rows.firstOrNull { it.first.contains(who, true) }
+        val top = scored.filter { it.second == best }.map { it.first.name to it.first.number }
+        if (top.isNotEmpty()) return top
+        return rows.filter { it.name.contains(who, true) }.map { it.name to it.number }
+    }
+
+    private fun contact(ctx: Context, who: String): Pair<String, String>? = contactMatches(ctx, who).firstOrNull()
+
+    private fun ambiguous(m: List<Pair<String, String>>): String? {
+        val names = m.map { it.first }.distinctBy { it.lowercase() }
+        return if (names.size > 1) "I found " + names.take(4).joinToString(", ") + ". Which one? Say the full name." else null
     }
 
     private fun call(ctx: Context, who: String): String {
-        val c = contact(ctx, who)
+        val m = contactMatches(ctx, who)
+        ambiguous(m)?.let { return it }
+        val c = m.firstOrNull()
         if (c == null) {
             launch(ctx, Intent(Intent.ACTION_DIAL))
             return if (has(ctx, android.Manifest.permission.READ_CONTACTS)) "I could not find $who in your contacts." else "Allow Contacts for Hukum (Settings > Apps > Hukum > Permissions) so I can call $who. I opened the dialer."

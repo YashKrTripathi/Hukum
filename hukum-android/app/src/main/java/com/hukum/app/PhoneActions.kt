@@ -175,13 +175,16 @@ object PhoneActions {
             return "I could not find \"$who\" in your contacts."
         }
         val url = "https://wa.me/${waNumber(num)}" + if (body.isNotBlank()) "?text=" + Uri.encode(body) else ""
-        if (body.isNotBlank() && HukumAccess.enabled(ctx)) HukumAccess.expectSend()
+        if (body.isNotBlank()) {
+            try { (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("Hukum message", body)) } catch (e: Exception) {}
+            if (HukumAccess.enabled(ctx)) HukumAccess.expectSend(body)
+        }
         val ok = launch(ctx, Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(pkg))
         return when {
             !ok -> "I could not open WhatsApp."
             body.isBlank() -> "Opened WhatsApp chat with $name."
             HukumAccess.enabled(ctx) -> "Sending to $name. If the phone or WhatsApp asks for your fingerprint or PIN, unlock it and I will finish sending."
-            else -> "Chat with $name is open with your message. Tap send, or turn on Hukum accessibility in More > Voice so I can send it."
+            else -> "Chat with $name is open. I copied your message: paste it and send, or turn on Hukum accessibility in More > Voice so I can type and send it."
         }
     }
 

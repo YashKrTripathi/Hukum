@@ -1,0 +1,17 @@
+name: tests
+# Tests only, on GitHub's own machines. Deployment is pull-based (the CRM follows main), so nothing here can
+# run on the college server, even from a fork's pull request.
+on:
+  push: { branches: [main] }
+  pull_request: { branches: [main] }
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r placement-agents/requirements-gateway.txt
+      - run: cd placement-agents && python -m unittest tests.test_pc -v
+      - run: for f in deploy/*.sh; do bash -n "$f"; done

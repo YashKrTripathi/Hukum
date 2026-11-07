@@ -1,0 +1,13 @@
+# systemd USER unit for the Hukum gateway (installed by deploy/setup-hukum-crm.sh; paths are filled in by sed)
+[Unit]
+Description=Hukum gateway (Jarvis brain API)
+After=network-online.target
+
+[Service]
+WorkingDirectory=@HUKUM_DIR@
+ExecStart=@PY@ -u run_gateway.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

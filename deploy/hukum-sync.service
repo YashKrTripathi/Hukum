@@ -1,0 +1,6 @@
+[Unit]
+Description=Hukum: pull the GitHub repo and deploy new commits
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash @REPO@/deploy/hukum-sync.sh

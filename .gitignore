@@ -1,0 +1,33 @@
+# Whitelist: only the Hukum projects are tracked in this repository (everything else under D:\learn is ignored)
+/*
+!/.gitignore
+!/.gitattributes
+!/.github/
+!/HUKUM_PLAN.md
+!/README.md
+!/placement-agents/
+!/hukum-android/
+!/deploy/
+
+# Never published, anywhere
+.env
+*.session
+*.session-journal
+*.db
+*.sqlite*
+*.apk
+*.zip
+*.log
+hukum_pc.json
+STOP_HUKUM_PC
+__pycache__/
+*.pyc
+venv/
+.gradle/
+.kotlin/
+build/
+local.properties
+*.jks
+*.keystore
+*.iml
+.idea/

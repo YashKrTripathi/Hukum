@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,10 +40,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 object C {
-    val bg = Color(0xFF080A0F); val panel = Color(0xFF0E121A); val card = Color(0xFF141A24); val card2 = Color(0xFF1B2431)
-    val line = Color(0xFF232D3D); val accent = Color(0xFF36B9FF); val accent2 = Color(0xFF786BFF)
-    val ok = Color(0xFF25D695); val warn = Color(0xFFFFB547); val err = Color(0xFFFF5263)
-    val tx = Color(0xFFF4F7FC); val mut = Color(0xFF9BA9BC)
+    val bg = Color(0xFF000000); val panel = Color(0xFF0B0B0B); val card = Color(0xFF151515); val card2 = Color(0xFF212121)
+    val line = Color(0xFF2B2B2B); val accent = Color(0xFFC6F432); val accent2 = Color(0xFFB7A5FF); val pink = Color(0xFFFFB6D5)
+    val ok = Color(0xFF7DF0A8); val warn = Color(0xFFFFB547); val err = Color(0xFFFF5263)
+    val tx = Color(0xFFF5F5F0); val mut = Color(0xFF9A9A94); val onAccent = Color(0xFF0A0F00)
 }
 
 fun sevColor(s: String) = when (s) { "error", "failed", "critical" -> C.err; "warning", "high", "queued" -> C.warn; "done", "ok", "running", "info" -> C.ok; else -> C.mut }
@@ -51,7 +52,7 @@ fun sevColor(s: String) = when (s) { "error", "failed", "critical" -> C.err; "wa
 @Composable
 fun HudBackground(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(C.bg)) {
-        Box(Modifier.fillMaxWidth().height(320.dp).background(Brush.verticalGradient(listOf(C.accent.copy(alpha = 0.10f), Color.Transparent))))
+        Box(Modifier.fillMaxWidth().height(380.dp).background(Brush.verticalGradient(listOf(C.accent.copy(alpha = 0.13f), Color.Transparent))))
         content()
     }
 }
@@ -79,8 +80,8 @@ fun Orb(size: androidx.compose.ui.unit.Dp, active: Boolean, alert: Boolean = fal
 
 @Composable
 fun Panel(modifier: Modifier = Modifier, hot: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.card)
-        .border(1.dp, if (hot) C.accent.copy(alpha = 0.5f) else C.line, RoundedCornerShape(16.dp)).padding(14.dp), content = content)
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.card)
+        .border(1.dp, if (hot) C.accent.copy(alpha = 0.5f) else C.line, RoundedCornerShape(24.dp)).padding(14.dp), content = content)
 }
 
 @Composable fun Title(t: String, modifier: Modifier = Modifier) = Text(t.uppercase(), color = C.mut, fontSize = 11.sp, letterSpacing = 1.4.sp, modifier = modifier.padding(bottom = 6.dp))
@@ -114,7 +115,7 @@ fun Row2(a: @Composable (Modifier) -> Unit, b: @Composable (Modifier) -> Unit) {
 @Composable
 fun Btn(t: String, modifier: Modifier = Modifier, danger: Boolean = false, primary: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     val bg = when { !enabled -> C.card2.copy(alpha = 0.5f); primary -> C.accent; danger -> C.err.copy(alpha = 0.15f); else -> C.card2 }
-    val fg = when { primary -> Color(0xFF04101A); danger -> C.err; else -> C.tx }
+    val fg = when { primary -> C.onAccent; danger -> C.err; else -> C.tx }
     Text(t, color = if (enabled) fg else C.mut, fontSize = 13.sp, modifier = modifier.clip(RoundedCornerShape(10.dp)).background(bg)
         .border(1.dp, if (danger) C.err.copy(alpha = 0.4f) else C.line, RoundedCornerShape(10.dp))
         .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 12.dp, vertical = 8.dp))
@@ -130,4 +131,47 @@ fun ago(ts: Double): String {
     if (ts <= 0) return "never"
     val s = (System.currentTimeMillis() / 1000.0 - ts).coerceAtLeast(0.0)
     return when { s < 60 -> "${s.toInt()}s ago"; s < 3600 -> "${(s / 60).toInt()}m ago"; s < 86400 -> "${(s / 3600).toInt()}h ago"; else -> "${(s / 86400).toInt()}d ago" }
+}
+
+
+/**
+ * The Hukum orb: a glassy, iridescent blob that wobbles. `energy` 0..1 makes it react (listening / speaking).
+ * Layered gradients (blue, violet, magenta, cyan) clipped to a morphing outline, a dark core and a bright rim.
+ */
+@Composable
+fun Blob(size: androidx.compose.ui.unit.Dp, energy: Float = 0.25f, modifier: Modifier = Modifier) {
+    val t = rememberInfiniteTransition(label = "blob")
+    val phase by t.animateFloat(0f, (2 * Math.PI).toFloat(), infiniteRepeatable(tween(7000, easing = LinearEasing)), label = "phase")
+    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(14000, easing = LinearEasing)), label = "spin")
+    val glow by t.animateFloat(0.7f, 1f, infiniteRepeatable(tween(2400), RepeatMode.Reverse), label = "glow")
+    Canvas(modifier.height(size).fillMaxWidth()) {
+        val c = Offset(this.size.width / 2, this.size.height / 2)
+        val r = this.size.height * 0.36f
+        val amp = 0.045f + 0.10f * energy
+        val path = androidx.compose.ui.graphics.Path()
+        val n = 90
+        for (i in 0..n) {
+            val a = (i.toFloat() / n) * (2 * Math.PI).toFloat()
+            val wob = 1f + amp * (Math.sin(3.0 * a + phase) * 0.55 + Math.sin(5.0 * a - phase * 1.3) * 0.3 + Math.sin(2.0 * a + phase * 0.6) * 0.4).toFloat()
+            val x = c.x + r * wob * Math.cos(a.toDouble()).toFloat()
+            val y = c.y + r * wob * Math.sin(a.toDouble()).toFloat()
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        path.close()
+        // outer glow
+        drawCircle(Brush.radialGradient(listOf(Color(0xFF7A5CFF).copy(alpha = 0.40f * glow), Color(0xFF2EC5FF).copy(alpha = 0.12f), Color.Transparent), c, r * 1.9f), r * 1.9f, c)
+        clipPath(path) {
+            drawRect(Color(0xFF05060C))
+            rotate(spin, c) {
+                drawCircle(Brush.radialGradient(listOf(Color(0xFF2E6BFF), Color.Transparent), c + Offset(-r * 0.45f, -r * 0.25f), r * 0.95f), r * 1.4f, c)
+                drawCircle(Brush.radialGradient(listOf(Color(0xFFFF3DB8), Color.Transparent), c + Offset(r * 0.5f, r * 0.35f), r * 0.85f), r * 1.4f, c)
+                drawCircle(Brush.radialGradient(listOf(Color(0xFF29F2D4), Color.Transparent), c + Offset(r * 0.1f, -r * 0.6f), r * 0.7f), r * 1.4f, c)
+                drawCircle(Brush.radialGradient(listOf(Color(0xFF9B6BFF), Color.Transparent), c + Offset(-r * 0.5f, r * 0.55f), r * 0.8f), r * 1.4f, c)
+            }
+            drawCircle(Brush.radialGradient(listOf(Color(0xFF000000).copy(alpha = 0.85f), Color.Transparent), c, r * 0.62f), r * 0.62f, c)   // dark glassy core
+            drawCircle(Color.White.copy(alpha = 0.55f), r * 1.0f, c, style = Stroke(width = r * 0.10f))                                       // bright rim
+        }
+        drawPath(path, Color.White.copy(alpha = 0.75f), style = Stroke(width = 2.5f))
+        drawCircle(Color.White.copy(alpha = 0.18f), r * 0.16f, c + Offset(-r * 0.45f, -r * 0.55f))                                            // specular highlight
+    }
 }

@@ -81,12 +81,12 @@ class ConvVM(app: Application) : AndroidViewModel(app) {
     }
 
     /** `first` = hidden opening message (e.g. __open__ or __ring__:reason) so Hukum speaks first. */
-    fun start(first: String? = null) {
+    fun start(first: String? = null, showFirst: Boolean = false) {
         if (job?.isActive == true) return
         active = true
         job = viewModelScope.launch {
             try {
-                if (first != null) turn(first, show = false)
+                if (first != null) turn(first, show = showFirst)
                 while (active) {
                     status = "listening…"
                     val heard = voice.listen(lang) { status = "🎙 $it" }
@@ -153,7 +153,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingRing = intent.getStringExtra("ring_reason")
-        if (Prefs.configured(this)) try { HukumService.start(this) } catch (e: Exception) {}
+        if (Prefs.configured(this)) try { HukumService.start(this, mic = true) } catch (e: Exception) {}
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = C.accent, background = C.bg, surface = C.panel, onSurface = C.tx,
                 onBackground = C.tx, secondary = C.accent2, outline = C.line, surfaceVariant = C.card, onSurfaceVariant = C.mut)) {
@@ -275,7 +275,7 @@ fun SetupDialog(vm: ConvVM, onClose: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onClose,
-        confirmButton = { TextButton(onClick = { save(); if (Prefs.configured(ctx)) HukumService.start(ctx); onClose() }) { Text("Save") } },
+        confirmButton = { TextButton(onClick = { save(); if (Prefs.configured(ctx)) HukumService.start(ctx, mic = true); onClose() }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onClose) { Text("Close") } },
         title = { Text("Connect to your Hukum server") },
         text = {

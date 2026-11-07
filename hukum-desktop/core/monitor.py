@@ -269,7 +269,10 @@ permissions.on_estop(lambda: pause() if _state["mode"] == "running" else None)
 
 def context():
     """What Boss seems to be doing now: foreground app/title, a project guess, and why (all marked inferred)."""
-    fg = winapi.foreground()
+    try:
+        fg = winapi.foreground()
+    except OSError:                      # not on Windows (CI, tests)
+        return {"app": None}
     if not fg:
         return {"app": None}
     try:

@@ -22,6 +22,13 @@ class DeskVM(app: Application) : AndroidViewModel(app) {
     var tick by mutableStateOf(0)                     // bump to make open screens reload
     var lastReply by mutableStateOf<String?>(null)
     var thinking by mutableStateOf(false)
+    val history = androidx.compose.runtime.mutableStateListOf<String>().also { it.addAll(Prefs.history(app)) }
+
+    private fun remember(text: String) {
+        history.remove(text); history.add(0, text)
+        while (history.size > 20) history.removeAt(history.size - 1)
+        Prefs.setHistory(getApplication(), history)
+    }
 
     suspend fun obj(path: String): JSONObject = withContext(Dispatchers.IO) { JSONObject(api.desktop("GET", path)) }
     suspend fun arr(path: String): JSONArray = withContext(Dispatchers.IO) { JSONArray(api.desktop("GET", path)) }
@@ -52,7 +59,7 @@ class DeskVM(app: Application) : AndroidViewModel(app) {
     /** Natural-language command to Hukum on the PC (same brain as the dashboard chat). */
     fun ask(text: String) {
         if (text.isBlank() || thinking) return
-        thinking = true; lastReply = null
+        thinking = true; lastReply = null; remember(text.trim())
         viewModelScope.launch {
             try {
                 val id = post("/api/m/chat", JSONObject().put("text", text)).s("id")

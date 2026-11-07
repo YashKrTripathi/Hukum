@@ -11,6 +11,11 @@ object Prefs {
     fun lang(c: Context): String = sp(c).getString("lang", "hi-IN") ?: "hi-IN"
     fun serverVoice(c: Context): Boolean = sp(c).getBoolean("server_voice", true)
 
+    fun wake(c: Context): Boolean = sp(c).getBoolean("wake", false)
+    fun setWake(c: Context, on: Boolean) = sp(c).edit().putBoolean("wake", on).apply()
+    fun history(c: Context): List<String> = (sp(c).getString("history", "") ?: "").split("\n").filter { it.isNotBlank() }
+    fun setHistory(c: Context, items: List<String>) = sp(c).edit().putString("history", items.take(20).joinToString("\n")).apply()
+
     fun save(c: Context, server: String, key: String) {
         sp(c).edit().putString("server", server.trim().trimEnd('/')).putString("key", key.trim()).apply()
     }

@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 /** Always-on guard: waits for ring events from the server and reports phone usage. */
 class HukumService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var wake: WakeWord? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -34,7 +35,15 @@ class HukumService : Service() {
             .setContentIntent(open)
             .setOngoing(true)
             .build()
-        startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        // The microphone foreground type may only be started while the app is on screen (Android 14), so a restart without the
+        // "mic" extra (boot, system restart) keeps the guard but leaves the wake word off until Hukum is opened again.
+        val wantWake = Prefs.wake(this) && intent?.getBooleanExtra("mic", false) == true &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        if (wantWake) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        try { startForeground(1, n, type) } catch (e: Exception) { startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE); wakeActive = false }
+        if (wantWake) { if (wake == null) wake = WakeWord(this); wake!!.start(); wakeActive = true }
+        else if (!Prefs.wake(this)) { wake?.stop(); wakeActive = false }
         if (!started) {
             started = true
             val api = Api(this)
@@ -114,6 +123,7 @@ class HukumService : Service() {
 
     override fun onDestroy() {
         try { unregisterReceiver(unlockReceiver) } catch (e: Exception) {}
+        wake?.stop(); wakeActive = false
         started = false
         scope.cancel()
         super.onDestroy()
@@ -121,8 +131,11 @@ class HukumService : Service() {
 
     companion object {
         @Volatile private var started = false
-        fun start(ctx: Context) {
-            ctx.startForegroundService(Intent(ctx, HukumService::class.java))
+        /** True while the "Hukum" wake word is really being listened for. */
+        @Volatile var wakeActive = false
+        /** mic = true only from the foreground UI (wake-word toggle / app start), see onStartCommand. */
+        fun start(ctx: Context, mic: Boolean = false) {
+            ctx.startForegroundService(Intent(ctx, HukumService::class.java).putExtra("mic", mic))
         }
     }
 }

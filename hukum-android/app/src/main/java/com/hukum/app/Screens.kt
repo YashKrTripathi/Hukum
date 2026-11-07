@@ -79,7 +79,7 @@ fun PcScreen(vm: DeskVM, go: (String) -> Unit) {
     var cmd by remember { mutableStateOf("") }
     Page {
         Panel(hot = true) {
-            Orb(150.dp, active = vm.thinking, alert = h?.optJSONObject("estop")?.optBoolean("on") == true || vm.error != null)
+            Blob(210.dp, energy = if (vm.thinking) 0.8f else 0.2f)
             Text(if (h != null) h.s("pc", "PC") else "PC", color = C.tx, fontSize = 18.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
             Mut(when {
                 vm.error != null -> vm.error!!
@@ -274,14 +274,14 @@ fun MoreScreen(vm: DeskVM, onConnection: () -> Unit) {
         Page {
             H("More", "Everything on your PC")
             MenuList(listOf("apps" to "📱  Applications", "projects" to "📁  Projects", "system" to "📊  System & processes", "monitor" to "👁  Live monitor", "whatsapp" to "💬  WhatsApp",
-                "memory" to "🧠  Memory", "automation" to "⚙  Automation", "security" to "🛡  Approvals & audit", "connection" to "🔗  Connection & permissions")) { if (it == "connection") onConnection() else sub = it }
+                "voice" to "🎙  Voice & wake word", "alerts" to "🔔  Alerts", "memory" to "🧠  Memory", "automation" to "⚙  Automation", "security" to "🛡  Approvals & audit", "connection" to "🔗  Connection & permissions")) { if (it == "connection") onConnection() else sub = it }
         }
     } else {
         Column(Modifier.fillMaxSize()) {
             Btn("‹ Back", Modifier.padding(start = 16.dp, top = 8.dp)) { sub = null }
             when (sub) {
                 "apps" -> AppsPage(vm); "projects" -> ProjectsPage(vm); "system" -> SystemPage(vm); "monitor" -> MonitorPage(vm)
-                "whatsapp" -> WhatsPage(vm); "memory" -> MemoryPage(vm); "automation" -> AutomationPage(vm); "security" -> SecurityPage(vm)
+                "whatsapp" -> WhatsPage(vm); "voice" -> VoicePage(); "alerts" -> AlertsScreen(vm); "memory" -> MemoryPage(vm); "automation" -> AutomationPage(vm); "security" -> SecurityPage(vm)
             }
         }
     }

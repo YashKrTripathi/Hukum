@@ -163,7 +163,7 @@ object PhoneActions {
         return when {
             !ok -> "I could not open WhatsApp."
             body.isBlank() -> "Opened WhatsApp chat with $name."
-            HukumAccess.enabled(ctx) -> "Sending to $name: $body"
+            HukumAccess.enabled(ctx) -> "Sending to $name. If the phone or WhatsApp asks for your fingerprint or PIN, unlock it and I will finish sending."
             else -> "Chat with $name is open with your message. Tap send, or turn on Hukum accessibility in More > Voice so I can send it."
         }
     }

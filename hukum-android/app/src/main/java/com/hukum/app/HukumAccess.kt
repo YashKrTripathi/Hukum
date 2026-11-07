@@ -7,7 +7,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 /**
- * Taps WhatsApp's Send button, but only for a short window right after Hukum itself opened a chat with Boss's message
+ * Taps WhatsApp's Send button, but only for about 90 seconds (so there is time to unlock the phone or the app with a fingerprint/PIN) right after Hukum itself opened a chat with Boss's message
  * filled in. It reads nothing else and does nothing otherwise. Boss turns it on once in Android's accessibility settings.
  */
 class HukumAccess : AccessibilityService() {
@@ -19,7 +19,10 @@ class HukumAccess : AccessibilityService() {
         if (btn != null && btn.isEnabled) {
             var n: AccessibilityNodeInfo? = btn
             while (n != null && !n.isClickable) n = n.parent
-            if (n?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) until = 0L
+            if (n?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) {
+                until = 0L
+                android.os.Handler(android.os.Looper.getMainLooper()).post { android.widget.Toast.makeText(applicationContext, "Hukum: message sent", android.widget.Toast.LENGTH_SHORT).show() }
+            }
         }
     }
 
@@ -34,7 +37,7 @@ class HukumAccess : AccessibilityService() {
 
     companion object {
         @Volatile private var until = 0L
-        fun expectSend() { until = System.currentTimeMillis() + 25_000 }
+        fun expectSend() { until = System.currentTimeMillis() + 90_000 }
         fun enabled(ctx: Context): Boolean {
             val v = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
             return v.contains(ctx.packageName + "/" + HukumAccess::class.java.name)

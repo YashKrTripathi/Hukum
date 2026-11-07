@@ -53,6 +53,9 @@ fun VoicePage() {
             var tick by remember { mutableStateOf(0) }
             androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); tick++ } }
             val ago = if (WakeWord.lastAt == 0L) "never" else "${(System.currentTimeMillis() - WakeWord.lastAt) / 1000 + 0 * tick}s ago"
+            Mut("Listener: " + WakeWord.state + if (HukumService.wakeActive) "" else " (service not listening)", Modifier.padding(top = 8.dp))
+            val crash = ctx.getSharedPreferences("hukum", android.content.Context.MODE_PRIVATE).getString("crash", "") ?: ""
+            if (crash.isNotBlank()) { Mut("Last crash: $crash", Modifier.padding(top = 8.dp), 11); Btn("Clear crash") { ctx.getSharedPreferences("hukum", android.content.Context.MODE_PRIVATE).edit().remove("crash").apply() } }
             Mut("Last heard: " + (WakeWord.lastHeard.ifBlank { "nothing yet" }) + " ($ago)", Modifier.padding(top = 8.dp))
             if (WakeWord.lastError.isNotBlank()) Mut("Recogniser: " + WakeWord.lastError, Modifier.padding(top = 2.dp))
             Spacer(Modifier.height(8.dp))

@@ -41,7 +41,15 @@ class HukumService : Service() {
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
         var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         if (wantWake) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        try { startForeground(1, n, type) } catch (e: Exception) { startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE); wakeActive = false }
+        if (!wantWake) WakeWord.state = when {
+            !Prefs.wake(this) -> "switched off"
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED -> "no microphone permission"
+            else -> "waiting: open Hukum to start listening"
+        }
+        try { startForeground(1, n, type) } catch (e: Exception) {
+            WakeWord.state = "Android refused the microphone service: ${e.javaClass.simpleName} ${e.message}"
+            startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE); wakeActive = false; wake?.stop(); return START_STICKY
+        }
         if (wantWake) { if (wake == null) wake = WakeWord(this); wake!!.start(); wakeActive = true }
         else if (!Prefs.wake(this)) { wake?.stop(); wakeActive = false }
         if (!started) {

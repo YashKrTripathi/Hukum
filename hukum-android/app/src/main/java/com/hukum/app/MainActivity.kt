@@ -153,6 +153,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         pendingRing = intent.getStringExtra("ring_reason")
+        val old = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try { getSharedPreferences("hukum", MODE_PRIVATE).edit().putString("crash", e.stackTraceToString().take(900)).commit() } catch (x: Exception) {}
+            old?.uncaughtException(t, e)
+        }
         if (Prefs.configured(this)) try { HukumService.start(this, mic = true) } catch (e: Exception) {}
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(primary = C.accent, background = C.bg, surface = C.panel, onSurface = C.tx,

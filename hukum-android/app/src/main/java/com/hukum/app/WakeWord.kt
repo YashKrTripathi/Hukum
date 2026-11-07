@@ -23,7 +23,7 @@ class WakeWord(private val ctx: Context) {
     private var rec: SpeechRecognizer? = null
     @Volatile private var running = false
 
-    fun start() { if (running) return; running = true; handler.post { loop() } }
+    fun start() { if (running) return; running = true; state = "starting"; handler.post { try { loop() } catch (e: Throwable) { state = "crashed: ${e.javaClass.simpleName} ${e.message}" } } }
     fun stop() { running = false; handler.post { destroy() } }
 
     private fun destroy() { try { rec?.cancel(); rec?.destroy() } catch (e: Exception) {}; rec = null }
@@ -32,12 +32,13 @@ class WakeWord(private val ctx: Context) {
 
     private fun loop() {
         if (!running) return
-        if (paused) { again(1200); return }
-        if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) { again(10_000); return }
-        if (!SpeechRecognizer.isRecognitionAvailable(ctx)) { again(30_000); return }
+        if (paused) { state = "paused (orb open)"; again(1200); return }
+        if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) { state = "no microphone permission"; again(10_000); return }
+        if (!SpeechRecognizer.isRecognitionAvailable(ctx)) { state = "this phone has no speech recognition service (install/enable the Google app)"; again(30_000); return }
         destroy()
-        val r = SpeechRecognizer.createSpeechRecognizer(ctx)
+        val r = try { SpeechRecognizer.createSpeechRecognizer(ctx) } catch (e: Exception) { state = "recogniser failed: ${e.message}"; again(10_000); return }
         rec = r
+        state = "listening"
         var fired = false
         fun check(list: List<String>?) {
             if (fired || list == null) return
@@ -81,6 +82,7 @@ class WakeWord(private val ctx: Context) {
         @Volatile var paused = false
         @Volatile var lastHeard = ""
         @Volatile var lastError = ""
+        @Volatile var state = "not started"
         @Volatile var lastAt = 0L
         private val PATTERN = Regex("(?i)\\b(hukum|hukam|hookum|hukm|hukkum|hokum)\\b|हुकुम|हुकम")
         private const val CH = "hukum_wake"
@@ -102,7 +104,7 @@ class WakeWord(private val ctx: Context) {
             nm.notify(ID, Notification.Builder(app, CH).setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Hukum")
                 .setContentText("Listening…").setCategory(Notification.CATEGORY_CALL).setAutoCancel(true).setTimeoutAfter(15_000)
                 .setContentIntent(pi).setFullScreenIntent(pi, true).build())
-            try { app.startActivity(i) } catch (e: Exception) { /* blocked from the background: the notification does the job */ }
+            try { app.startActivity(i); lastError = "" } catch (e: Exception) { lastError = "open orb: ${e.javaClass.simpleName} ${e.message}" }
         }
 
         fun clear(ctx: Context) { ctx.getSystemService(NotificationManager::class.java).cancel(ID) }

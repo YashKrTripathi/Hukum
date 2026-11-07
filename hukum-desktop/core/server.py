@@ -291,6 +291,13 @@ def approvals_decide(q, body):
         return {"ok": False, "error": str(e)}
 
 
+@route("POST", "/api/quit")
+def quit_(q, body):
+    store.audit("boss", "quit", "tray/dashboard")
+    threading.Timer(0.5, lambda: os._exit(0)).start()
+    return {"ok": True}
+
+
 @route("POST", "/api/estop")
 def estop(q, body):
     if body.get("on"):

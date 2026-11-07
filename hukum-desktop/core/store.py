@@ -75,6 +75,8 @@ SETTINGS = [
     ("System", "project.scan_minutes", "int", 10, {"min": 1, "max": 1440}, "Minutes between project rescans"),
     ("System", "agents.max_parallel", "int", 2, {"min": 1, "max": 8}, "Most coding agents running at once"),
     ("System", "agents.timeout_min", "int", 45, {"min": 1, "max": 600}, "Stop a coding agent after this many minutes"),
+    ("System", "system.autostart", "bool", False, {}, "Start Hukum Desktop when you sign in to Windows"),
+    ("System", "system.tray", "bool", True, {}, "Show the Hukum icon in the system tray (open dashboard, emergency stop, quit)"),
     ("System", "agents.codex_model", "str", "", {}, "Model passed to `codex exec -m` (empty = Codex's own default)"),
     ("System", "shell.timeout_s", "int", 120, {"min": 5, "max": 3600}, "Time limit for shell commands"),
     ("Appearance", "ui.accent", "str", "#36B9FF", {}, "Accent colour (hex)"),

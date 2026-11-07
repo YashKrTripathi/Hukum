@@ -17,7 +17,7 @@ def main():
     ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--no-browser", action="store_true")
     a = ap.parse_args()
-    from core import store, sysmon, projects, agents, automation, gateway, server, notify, permissions
+    from core import store, sysmon, projects, agents, automation, gateway, server, notify, permissions, autostart
     store.init()
     store.purge()
     sysmon.start()
@@ -31,6 +31,20 @@ def main():
     print("Hukum Desktop is running.")
     print("Dashboard:", url)
     print("(the link contains your private access token - do not share it)")
+
+    def on_setting(key, value):
+        try:
+            if key == "system.autostart":
+                autostart.set_enabled(bool(value))
+            elif key == "system.tray":
+                autostart.start_tray(a.port, srv.token) if value else autostart.stop_tray()
+        except Exception as e:
+            print("setting", key, "failed:", e)
+    store.on_change(on_setting)
+    if store.get("system.autostart") != autostart.is_enabled():
+        store.set_("system.autostart", autostart.is_enabled())          # show the real state
+    if store.get("system.tray"):
+        autostart.start_tray(a.port, srv.token)
     if not a.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 

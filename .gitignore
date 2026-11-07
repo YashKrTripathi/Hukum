@@ -7,6 +7,7 @@
 !/README.md
 !/placement-agents/
 !/hukum-android/
+!/hukum-desktop/
 !/deploy/
 
 # Never published, anywhere
@@ -31,3 +32,4 @@ local.properties
 *.keystore
 *.iml
 .idea/
+hukum-desktop/data/

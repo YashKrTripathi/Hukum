@@ -61,6 +61,17 @@ class PCTests(unittest.TestCase):
         self.assertEqual(cm.exception.code, 401)
         req = urllib.request.Request(cfg["gateway"] + "/api/pc/poll?wait=1", headers={"X-Key": webserver.key()})
         with self.assertRaises(urllib.error.HTTPError): urllib.request.urlopen(req)     # phone key cannot poll jobs
+        # desktop dashboard endpoints: status + notify need the phone key
+        req = urllib.request.Request(cfg["gateway"] + "/api/status")
+        with self.assertRaises(urllib.error.HTTPError) as cm: urllib.request.urlopen(req)
+        self.assertEqual(cm.exception.code, 401)
+        req = urllib.request.Request(cfg["gateway"] + "/api/status", headers={"X-Key": webserver.key()})
+        st = json.loads(urllib.request.urlopen(req).read())
+        self.assertTrue(st["pc_online"]); self.assertIn("inbox_open", st)
+        req = urllib.request.Request(cfg["gateway"] + "/api/notify", json.dumps({"text": "build failed on PC"}).encode(),
+                                     {"X-Key": webserver.key(), "Content-Type": "application/json"})
+        self.assertTrue(json.loads(urllib.request.urlopen(req).read())["ok"])
+        self.assertTrue(any(e["type"] == "nudge" and "build failed on PC" in e["text"] for e in webserver._events))
 
 
 if __name__ == "__main__":

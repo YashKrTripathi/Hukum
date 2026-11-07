@@ -95,6 +95,14 @@ class H(BaseHTTPRequestHandler):
             return self._json(200, {"jobs": pcbridge.poll(wait)})
         if path == "/api/ping":
             return self._json(200, {"ok": True})
+        if path == "/api/status":
+            if not self._authed():
+                return self._json(401, {"error": "unauthorized"})
+            ph = phone_state()
+            n = db.q("SELECT COUNT(*) n FROM inbox WHERE status='open'")[0]["n"]
+            return self._json(200, {"phone_seen_s": round(time.time() - PHONE[1]) if PHONE[1] else None,
+                                    "phone_state": ph[0] if ph else None, "pc_online": pcbridge.online(),
+                                    "inbox_open": n, "call_mode": db.get("call_mode", "normal")})
         if path == "/api/tools":
             if not self._authed():
                 return self._json(401, {"error": "unauthorized"})
@@ -132,7 +140,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json(200, {"ok": ok})
             except Exception as e:
                 return self._json(500, {"error": str(e)[:200]})
-        if self.path not in ("/api/chat", "/api/tts", "/api/phone_state", "/api/tool", "/api/inbox"):
+        if self.path not in ("/api/chat", "/api/tts", "/api/phone_state", "/api/tool", "/api/inbox", "/api/notify"):
             return self._json(404, {})
         if not self._authed():
             return self._json(401, {"error": "unauthorized"})
@@ -155,6 +163,9 @@ class H(BaseHTTPRequestHandler):
                         inbox.add(str(m.get("app", "")), str(m.get("sender", "")), str(m.get("chat", "")),
                                   str(m.get("text", "")), float(m.get("ts") or 0) / 1000 or None,
                                   str(m.get("key", "")), bool(m.get("can_reply")))
+                return self._json(200, {"ok": True})
+            if self.path == "/api/notify":                  # desktop -> phone alert
+                push_event("nudge", str(body.get("text", ""))[:300])
                 return self._json(200, {"ok": True})
             if self.path == "/api/phone_state":
                 global PHONE

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hukum</title><link rel="stylesheet" href="/app.css"></head>
+<body>
+<div id="app">
+  <header>
+    <span class="orb" id="orb"></span><span class="logo">HUKUM</span>
+    <span class="pill" id="pMon"><span class="dot"></span><span>Monitoring</span></span>
+    <span class="pill" id="pAi"><span class="dot"></span><span>AI</span></span>
+    <span class="pill" id="pGw"><span class="dot"></span><span>Phone link</span></span>
+    <span class="sp"></span>
+    <button class="btn" id="bAppr" onclick="go('security')">Approvals <span class="badge" id="nAppr">0</span></button>
+    <button class="estop" id="bStop" title="Pause everything now" onclick="estop()">EMERGENCY STOP</button>
+  </header>
+  <nav id="nav"></nav>
+  <main id="main"></main>
+  <aside id="side"></aside>
+</div>
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body></html>

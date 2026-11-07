@@ -15,3 +15,10 @@ jobs:
       - run: pip install -r placement-agents/requirements-gateway.txt
       - run: cd placement-agents && python -m unittest tests.test_pc -v
       - run: for f in deploy/*.sh; do bash -n "$f"; done
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: cd hukum-desktop && HUKUM_LIVE=0 python -m unittest tests.test_core tests.test_live -v

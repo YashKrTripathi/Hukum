@@ -108,6 +108,8 @@ class ConvVM(app: Application) : AndroidViewModel(app) {
         status = "thinking…"
         val r = try {
             withContext(Dispatchers.IO) { api.chat(text) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             messages.add(Msg(false, "⚠️ ${e.message}"))
             active = false

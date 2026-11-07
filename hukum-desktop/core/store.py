@@ -88,7 +88,7 @@ _lock = threading.RLock()
 _cache = None
 _listeners = []
 CFG_PATH = os.path.join(DATA_DIR, "settings.json")
-SECRET_PREFIX = "HukumDesktop/"
+SECRET_PREFIX = "HukumDesktop/" + ("test/" if os.environ.get("HUKUM_DATA") else "")   # test runs never touch the real secrets
 
 
 def _load():

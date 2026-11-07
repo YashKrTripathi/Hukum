@@ -53,6 +53,9 @@ class PCTests(unittest.TestCase):
             time.sleep(0.2)
         self.assertEqual(pcbridge._jobs[jid]["status"], "done", pcbridge._jobs[jid])
         self.assertIn("agent got:build it", tool("code_status", {"job": jid}))
+        for _ in range(50):          # the nudge is pushed just after the job is marked done: wait for it
+            if any(e["type"] == "nudge" and jid in e["text"] for e in webserver._events): break
+            time.sleep(0.1)
         self.assertTrue(any(e["type"] == "nudge" and jid in e["text"] for e in webserver._events))
         # wrong PC key is refused
         import urllib.request, urllib.error
